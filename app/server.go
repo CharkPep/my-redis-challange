@@ -14,6 +14,8 @@ func main() {
 	// so we register the handler for both "ping" and "PING"
 	server.RegisterHandler("ping", handlers.Ping)
 	server.RegisterHandler("PING", handlers.Ping)
-
+	server.RegisterHandler("echo", handlers.Echo)
+	server.RegisterHandler("ECHO", handlers.Echo)
+	defer server.Close()
 	server.ListenAndServe()
 }
