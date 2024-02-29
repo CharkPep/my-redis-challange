@@ -287,6 +287,7 @@ func (a AnyResp) MarshalRESP(w io.Writer) error {
 		b := BulkString{S: nil, EncodeNil: a.EncodeBulkStringNil}
 		return b.MarshalRESP(w)
 	case []interface{}:
+		fmt.Println("array")
 		var arrayPrefix = make([]byte, 0, 32)
 		arrayPrefix = append(arrayPrefix, RespArrayType...)
 		arrayPrefix = strconv.AppendInt(arrayPrefix, int64(len(v)), 10)
@@ -298,8 +299,11 @@ func (a AnyResp) MarshalRESP(w io.Writer) error {
 		}
 		_, err := w.Write(arrayBuff.Bytes())
 		return err
-
+	case []RespMarshaler:
+		arr := RespArray{A: v}
+		return arr.MarshalRESP(w)
 	}
+
 	return fmt.Errorf("unknown RESP type: %T", a.I)
 }
 

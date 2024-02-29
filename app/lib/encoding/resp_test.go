@@ -451,3 +451,71 @@ func TestAnyResp_MarshalRESP2(t *testing.T) {
 		}
 	}
 }
+
+func TestAnyResp_UnmarshalRESPAndMarshalRESP(t *testing.T) {
+	type tests struct {
+		input  []byte
+		output AnyResp
+	}
+	testCases := []tests{
+		{
+			input:  []byte("+hello\r\n"),
+			output: AnyResp{SimpleString{"hello"}, false},
+		},
+		{
+			input:  []byte("-error\r\n"),
+			output: AnyResp{SimpleError{"error"}, false},
+		},
+		{
+			input:  []byte(":123\r\n"),
+			output: AnyResp{SimpleInt{123}, false},
+		},
+		{
+			input:  []byte("$5\r\nhello\r\n"),
+			output: AnyResp{BulkString{[]byte("hello"), false}, false},
+		},
+		{
+			input: []byte("*3\r\n$3\r\nfoo\r\n+bar\r\n:-1\r\n"),
+			output: AnyResp{RespArray{
+				A: []RespMarshaler{
+					BulkString{[]byte("foo"), false},
+					SimpleString{"bar"},
+					SimpleInt{-1},
+				},
+			}, false},
+		},
+	}
+	// Little bit brainfuck, basically what we want to do is check whether
+	// Marshaling and Unmarshaling gives the same data
+	for _, test := range testCases {
+		var marshaled AnyResp
+		marshaled.I = test.output.I
+		buff := bytes.NewBuffer([]byte{})
+		err := marshaled.MarshalRESP(buff)
+		if err != nil {
+			t.Errorf("unexpected error: %s", err)
+		}
+		if buff.String() != string(test.input) {
+			t.Errorf("input %q, got %q", test.input, buff.String())
+		}
+
+		tUnmarshaler := reflect.TypeOf(test.output)
+		unmarshaled, ok := reflect.New(tUnmarshaler).Interface().(RespUnmarshaler)
+		if !ok {
+			t.Errorf("unexpected error: %s", err)
+		}
+		r := bufio.NewReader(bytes.NewReader(test.input))
+		err = unmarshaled.UnmarshalRESP(r)
+		if err != nil {
+			t.Errorf("unexpected error: %s", err)
+		}
+		val := reflect.ValueOf(unmarshaled)
+		if val.Kind() == reflect.Ptr {
+			val = val.Elem()
+		}
+		if AssertAny(val.Interface().(AnyResp), test.output) {
+			t.Errorf("input %v, got %q", test.output, val)
+		}
+
+	}
+}

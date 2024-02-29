@@ -63,7 +63,8 @@ func (s *Server) parser(con net.Conn) {
 			expression := resp.AnyResp{}
 			err := expression.UnmarshalRESP(reader)
 			if err != nil {
-				panic(err)
+				resp.SimpleError{E: err.Error()}.MarshalRESP(con)
+				return
 			}
 			command, err := getCommand(&expression)
 			if err != nil {
@@ -72,9 +73,11 @@ func (s *Server) parser(con net.Conn) {
 			handler, ok := s.handlers[command]
 			if !ok {
 				resp.SimpleError{fmt.Sprintf("unknown command: %s", command)}.MarshalRESP(con)
+				return
 			}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
+			defer con.Close()
 			res, err := handler(ctx, &expression)
 			if err != nil {
 				resp.SimpleError{err.Error()}.MarshalRESP(con)
@@ -82,7 +85,6 @@ func (s *Server) parser(con net.Conn) {
 			resp.AnyResp{res, false}.MarshalRESP(con)
 		}
 	}
-	defer con.Close()
 }
 
 func (s *Server) RegisterHandler(command string, handler func(context.Context, *resp.AnyResp) (interface{}, error)) {
@@ -112,7 +114,6 @@ func (s *Server) ListenAndServe() error {
 			return nil
 		default:
 			conn, err := s.listener.Accept()
-			fmt.Println("Accepted connection")
 			if err != nil {
 				return err
 			}
@@ -124,6 +125,5 @@ func (s *Server) ListenAndServe() error {
 }
 
 func (s *Server) Close() error {
-	fmt.Println("Closing server")
 	return s.listener.Close()
 }
