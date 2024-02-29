@@ -6,22 +6,23 @@ import (
 	"fmt"
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
 	"net"
+	"time"
 )
 
 type ServerConfig struct {
-	Host                  string
-	Port                  int
-	ConnectionTimeout     int
-	ConnectionIdleTimeout int
-	MaxConnections        int
+	Host                   string
+	Port                   int
+	ConnectionReadTimeout  time.Duration
+	ConnectionWriteTimeout time.Duration
+	MaxConnections         int
 }
 
 var DefaultConfig = &ServerConfig{
-	Host:                  "localhost",
-	Port:                  6379,
-	ConnectionTimeout:     10000,
-	ConnectionIdleTimeout: 2000,
-	MaxConnections:        2000,
+	Host:                   "localhost",
+	Port:                   6379,
+	ConnectionReadTimeout:  time.Second * 10,
+	ConnectionWriteTimeout: time.Second * 2,
+	MaxConnections:         2000,
 }
 
 type Server struct {
@@ -45,29 +46,34 @@ func getCommand(expression *resp.AnyResp) (string, error) {
 }
 
 func (s *Server) parser(con net.Conn) {
-	reader := bufio.NewReader(con)
-	expression := resp.AnyResp{}
-	err := expression.UnmarshalRESP(reader)
-	if err != nil {
-		panic(err)
+	for {
+		select {
+		case <-s.close:
+			return
+		default:
+			reader := bufio.NewReader(con)
+			expression := resp.AnyResp{}
+			err := expression.UnmarshalRESP(reader)
+			if err != nil {
+				panic(err)
+			}
+			command, err := getCommand(&expression)
+			if err != nil {
+				resp.SimpleError{err.Error()}.MarshalRESP(con)
+			}
+			handler, ok := s.handlers[command]
+			if !ok {
+				resp.SimpleError{fmt.Sprintf("unknown command: %s", command)}.MarshalRESP(con)
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			res, err := handler(ctx, &expression)
+			if err != nil {
+				resp.SimpleError{err.Error()}.MarshalRESP(con)
+			}
+			resp.AnyResp{res, false}.MarshalRESP(con)
+		}
 	}
-	command, err := getCommand(&expression)
-	fmt.Printf("command: %q\n", command)
-	if err != nil {
-		resp.SimpleError{err.Error()}.MarshalRESP(con)
-	}
-	handler, ok := s.handlers[command]
-	if !ok {
-		resp.SimpleError{fmt.Sprintf("unknown command: %s", command)}.MarshalRESP(con)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	res, err := handler(ctx, &expression)
-	if err != nil {
-		resp.SimpleError{err.Error()}.MarshalRESP(con)
-	}
-	fmt.Println("response: ", res)
-	resp.AnyResp{res, false}.MarshalRESP(con)
 	defer con.Close()
 }
 
@@ -91,13 +97,21 @@ func New(config *ServerConfig) (*Server, error) {
 	}, err
 }
 
-func (s Server) ListenAndServe() error {
+func (s *Server) ListenAndServe() error {
 	for {
 		select {
 		case <-s.close:
 			return nil
 		default:
 			conn, err := s.listener.Accept()
+			if err != nil {
+				return err
+			}
+			err = conn.SetReadDeadline(time.Now().Add(s.config.ConnectionReadTimeout))
+			if err != nil {
+				fmt.Println("Error setting read deadline", err)
+			}
+			err = conn.SetWriteDeadline(time.Now().Add(s.config.ConnectionWriteTimeout))
 			if err != nil {
 				return err
 			}
