@@ -1,10 +1,12 @@
 package lib
 
 import (
+	"fmt"
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/handlers"
 	"net"
 	"testing"
+	"time"
 )
 
 func TestServer_getCommand(t *testing.T) {
@@ -85,14 +87,19 @@ func TestServerShouldReturnPongConcurrently_ListenAndServer(t *testing.T) {
 	}
 	server.RegisterHandler("ping", handlers.Ping)
 	go server.ListenAndServe()
-	defer server.Close()
-	t.Run("ping", func(t *testing.T) {
-		for i := 0; i < 100; i++ {
+	t.Log("Server started")
+	for i := 0; i < 100; i++ {
+		t.Run(fmt.Sprintf("ping:%d", i), func(t *testing.T) {
+			t.Parallel()
 			conn, err := net.Dial("tcp", "localhost:6379")
 			if err != nil {
 				t.Errorf("unexpected error: %s", err)
 			}
-			conn.Write([]byte("*1\r\n$4\r\nping\r\n"))
+			time.Sleep(50 * time.Millisecond)
+			_, err = conn.Write([]byte("*1\r\n$4\r\nping\r\n"))
+			if err != nil {
+				t.Errorf("unexpected error: %s", err)
+			}
 			buf := make([]byte, 1024)
 			n, err := conn.Read(buf)
 			if err != nil {
@@ -101,6 +108,6 @@ func TestServerShouldReturnPongConcurrently_ListenAndServer(t *testing.T) {
 			if string(buf[:n]) != "+PONG\r\n" {
 				t.Errorf("expected +PONG, got %s, length %d", string(buf[:n]), n)
 			}
-		}
-	})
+		})
+	}
 }

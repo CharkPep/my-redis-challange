@@ -21,7 +21,7 @@ var DefaultConfig = &ServerConfig{
 	Host:                   "localhost",
 	Port:                   6379,
 	ConnectionReadTimeout:  time.Second * 10,
-	ConnectionWriteTimeout: time.Second * 2,
+	ConnectionWriteTimeout: time.Second * 10,
 	MaxConnections:         2000,
 }
 
@@ -46,6 +46,14 @@ func getCommand(expression *resp.AnyResp) (string, error) {
 }
 
 func (s *Server) parser(con net.Conn) {
+	err := con.SetReadDeadline(time.Now().Add(s.config.ConnectionReadTimeout))
+	if err != nil {
+		resp.SimpleError{E: err.Error()}.MarshalRESP(con)
+	}
+	err = con.SetWriteDeadline(time.Now().Add(s.config.ConnectionWriteTimeout))
+	if err != nil {
+		resp.SimpleError{E: err.Error()}.MarshalRESP(con)
+	}
 	for {
 		select {
 		case <-s.close:
@@ -104,14 +112,7 @@ func (s *Server) ListenAndServe() error {
 			return nil
 		default:
 			conn, err := s.listener.Accept()
-			if err != nil {
-				return err
-			}
-			err = conn.SetReadDeadline(time.Now().Add(s.config.ConnectionReadTimeout))
-			if err != nil {
-				fmt.Println("Error setting read deadline", err)
-			}
-			err = conn.SetWriteDeadline(time.Now().Add(s.config.ConnectionWriteTimeout))
+			fmt.Println("Accepted connection")
 			if err != nil {
 				return err
 			}
@@ -123,5 +124,6 @@ func (s *Server) ListenAndServe() error {
 }
 
 func (s *Server) Close() error {
+	fmt.Println("Closing server")
 	return s.listener.Close()
 }
