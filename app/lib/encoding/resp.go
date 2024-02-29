@@ -300,6 +300,7 @@ func (a AnyResp) MarshalRESP(w io.Writer) error {
 		_, err := w.Write(arrayBuff.Bytes())
 		return err
 	case []RespMarshaler:
+		fmt.Println("array", v)
 		arr := RespArray{A: v}
 		return arr.MarshalRESP(w)
 	}

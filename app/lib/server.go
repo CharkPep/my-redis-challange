@@ -45,6 +45,22 @@ func getCommand(expression *resp.AnyResp) (string, error) {
 	return "", fmt.Errorf("invalid command type: %T", expression.I)
 }
 
+func removeCommand(expression resp.AnyResp) (*resp.AnyResp, error) {
+	switch expression.I.(type) {
+	case resp.SimpleString:
+		return &resp.AnyResp{resp.BulkString{nil, true}, true}, nil
+	case resp.BulkString:
+		return &resp.AnyResp{resp.BulkString{nil, true}, true}, nil
+	case resp.RespArray:
+		elem := resp.RespArray{A: expression.I.(resp.RespArray).A[1:]}
+		if len(elem.A) == 0 {
+			return &resp.AnyResp{resp.BulkString{nil, true}, true}, nil
+		}
+		return &resp.AnyResp{I: elem}, nil
+	}
+	return nil, fmt.Errorf("invalid command type: %T", expression.I)
+}
+
 func (s *Server) parser(con net.Conn) {
 	err := con.SetReadDeadline(time.Now().Add(s.config.ConnectionReadTimeout))
 	if err != nil {
@@ -67,7 +83,6 @@ func (s *Server) parser(con net.Conn) {
 				return
 			}
 			command, err := getCommand(&expression)
-			fmt.Println("command", command)
 			if err != nil {
 				resp.SimpleError{err.Error()}.MarshalRESP(con)
 			}
@@ -79,17 +94,23 @@ func (s *Server) parser(con net.Conn) {
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			defer con.Close()
+			var epx *resp.AnyResp
+			if epx, err = removeCommand(expression); err != nil {
+				resp.SimpleError{err.Error()}.MarshalRESP(con)
+			}
+			expression = *epx
+			fmt.Printf("request: %v\n", expression)
 			res, err := handler(ctx, &expression)
 			if err != nil {
 				resp.SimpleError{err.Error()}.MarshalRESP(con)
 			}
+			fmt.Printf("response: %v\n", res)
 			resp.AnyResp{res, false}.MarshalRESP(con)
 		}
 	}
 }
 
 func (s *Server) RegisterHandler(command string, handler func(context.Context, *resp.AnyResp) (interface{}, error)) {
-	fmt.Println("registering handler for command", command)
 	s.handlers[command] = handler
 }
 
