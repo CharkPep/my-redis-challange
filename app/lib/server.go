@@ -67,6 +67,7 @@ func (s *Server) parser(con net.Conn) {
 				return
 			}
 			command, err := getCommand(&expression)
+			fmt.Println("command", command)
 			if err != nil {
 				resp.SimpleError{err.Error()}.MarshalRESP(con)
 			}
@@ -88,6 +89,7 @@ func (s *Server) parser(con net.Conn) {
 }
 
 func (s *Server) RegisterHandler(command string, handler func(context.Context, *resp.AnyResp) (interface{}, error)) {
+	fmt.Println("registering handler for command", command)
 	s.handlers[command] = handler
 }
 

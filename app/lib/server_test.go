@@ -117,6 +117,11 @@ func TestServerShouldReturnEcho_ListenAndServer(t *testing.T) {
 			args:   resp.RespArray{A: []resp.RespMarshaler{resp.BulkString{S: []byte("echo")}, resp.BulkString{S: []byte("foo")}}},
 			output: "*1\r\n$3\r\nfoo\r\n",
 		},
+		{
+			args: resp.RespArray{A: []resp.RespMarshaler{resp.BulkString{S: []byte("echo")},
+				resp.BulkString{S: []byte("foo")}, resp.BulkString{S: []byte("bar")}}},
+			output: "*1\r\n$3\r\nfoo\r\n$3\r\nbar\r\n",
+		},
 	}
 
 	for i, test := range tests {
@@ -139,6 +144,7 @@ func TestServerShouldReturnEcho_ListenAndServer(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error: %s", err)
 			}
+			t.Logf("expected %s, got %s, length %d", test.output, string(buf[:n]), n)
 			if string(buf[:n]) != test.output {
 				t.Fatalf("expected %s, got %s, length %d", test.output, string(buf[:n]), n)
 			}
