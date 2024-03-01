@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	TERMINATOR       = []byte("\\r\\n")
+	TERMINATOR       = []byte("\r\n")
 	SimpleStringType = []byte("+")
 	SimpleErrorType  = []byte("-")
 	SimpleIntType    = []byte(":")

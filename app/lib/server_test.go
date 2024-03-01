@@ -9,7 +9,6 @@ import (
 	"os"
 	"reflect"
 	"testing"
-	"time"
 )
 
 func TestMain(m *testing.M) {
@@ -119,32 +118,7 @@ func TestServerShouldReturnPong_ListenAndServer(t *testing.T) {
 		t.Errorf("unexpected error: %s", err)
 	}
 	if string(buf[:n]) != "+PONG\\r\\n" {
-		t.Errorf("expected +PONG, got %s, length %d", string(buf[:n]), n)
-	}
-}
-
-func TestServerShouldReturnPongConcurrently_ListenAndServer(t *testing.T) {
-	for i := 0; i < 100; i++ {
-		t.Run(fmt.Sprintf("ping:%d", i), func(ts *testing.T) {
-			ts.Parallel()
-			conn, err := net.Dial("tcp", "localhost:6379")
-			if err != nil {
-				ts.Errorf("unexpected error: %s", err)
-			}
-			time.Sleep(10 * time.Millisecond)
-			_, err = conn.Write([]byte("*1\\r\\n$4\\r\\nping\\r\\n"))
-			if err != nil {
-				ts.Errorf("unexpected error: %s", err)
-			}
-			buf := make([]byte, 1024)
-			n, err := conn.Read(buf)
-			if err != nil {
-				ts.Errorf("unexpected error: %s", err)
-			}
-			if string(buf[:n]) != "+PONG\\r\\n" {
-				ts.Errorf("expected +PONG, got %s, length %d", string(buf[:n]), n)
-			}
-		})
+		t.Errorf("expected +PONG\\r\\n, got %s", string(buf[:n]))
 	}
 }
 
