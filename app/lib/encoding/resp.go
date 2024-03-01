@@ -208,6 +208,7 @@ func (a RespArray) MarshalRESP(w io.Writer) error {
 	buff = append(buff, TERMINATOR...)
 	elementsBuff := bytes.NewBuffer(make([]byte, 0, 16))
 	for _, v := range a.A {
+		fmt.Println("v", v)
 		err := v.MarshalRESP(elementsBuff)
 		if err != nil {
 			return err
