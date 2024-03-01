@@ -143,7 +143,6 @@ type BulkString struct {
 }
 
 func (b BulkString) MarshalRESP(w io.Writer) error {
-	fmt.Println("b", string(b.S))
 	if b.EncodeNil && b.S == nil {
 		_, err := w.Write(BULK_STRING_NULL)
 		return err
@@ -159,7 +158,6 @@ func (b BulkString) MarshalRESP(w io.Writer) error {
 	buff = append(buff, TERMINATOR...)
 	buff = append(buff, b.S...)
 	buff = append(buff, TERMINATOR...)
-	fmt.Printf("buff: %s\n", string(buff))
 	_, err := w.Write(buff)
 	return err
 }
@@ -203,21 +201,19 @@ type RespArray struct {
 }
 
 func (a RespArray) MarshalRESP(w io.Writer) error {
-	fmt.Printf("a: %v\n", a.A)
-	buff := make([]byte, 0, 16)
+	buff := make([]byte, 0, 64)
 	buff = append(buff, RespArrayType...)
 	buff = strconv.AppendInt(buff, int64(len(a.A)), 10)
 	buff = append(buff, TERMINATOR...)
-	elementsBuff := bytes.NewBuffer(make([]byte, 0, 16))
+	elementsBuff := bytes.NewBuffer(make([]byte, 0, 64))
 	for _, v := range a.A {
-		fmt.Println("v", v)
 		err := v.MarshalRESP(elementsBuff)
 		if err != nil {
 			return err
 		}
 	}
 	buff = append(buff, elementsBuff.Bytes()...)
-	fmt.Println("buff", string(buff))
+	fmt.Printf("Resp array buffer to be written: %q, %d\n", string(buff), len(buff))
 	_, err := w.Write(buff)
 	return err
 }
@@ -305,7 +301,6 @@ func (a AnyResp) MarshalRESP(w io.Writer) error {
 		_, err := w.Write(arrayBuff.Bytes())
 		return err
 	case []RespMarshaler:
-		fmt.Println("array of RespMarshaler")
 		arr := RespArray{A: v}
 		return arr.MarshalRESP(w)
 	}

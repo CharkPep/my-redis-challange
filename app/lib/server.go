@@ -86,14 +86,12 @@ func (s *Server) parser(con net.Conn) {
 		reader := bufio.NewReader(bytes.NewReader(buff))
 		expression := resp.AnyResp{}
 		err = expression.UnmarshalRESP(reader)
-		fmt.Printf("expression: %v, error %v\n", expression, err)
 		if err != nil {
 			resp.SimpleError{E: err.Error()}.MarshalRESP(con)
 			return
 		}
 
 		command, err := getCommand(&expression)
-		fmt.Printf("command: %s\n", command)
 		if err != nil {
 			resp.SimpleError{err.Error()}.MarshalRESP(con)
 		}
@@ -109,14 +107,11 @@ func (s *Server) parser(con net.Conn) {
 			resp.SimpleError{err.Error()}.MarshalRESP(con)
 		}
 		expression = *epx
-		fmt.Printf("expression: %v\n", expression)
 		res, err := handler(ctx, &expression)
-		fmt.Printf("res: %v, error: %v\n", res, err)
 		if err != nil {
 			resp.SimpleError{err.Error()}.MarshalRESP(con)
 		}
 		resp.AnyResp{res, false}.MarshalRESP(con)
-
 	}
 }
 
