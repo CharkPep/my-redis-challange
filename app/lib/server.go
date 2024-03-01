@@ -2,6 +2,7 @@ package lib
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
@@ -20,8 +21,8 @@ type ServerConfig struct {
 var DefaultConfig = &ServerConfig{
 	Host:                   "localhost",
 	Port:                   6379,
-	ConnectionReadTimeout:  time.Second * 10,
-	ConnectionWriteTimeout: time.Second * 10,
+	ConnectionReadTimeout:  time.Second * 2,
+	ConnectionWriteTimeout: time.Second * 2,
 	MaxConnections:         2000,
 }
 
@@ -62,51 +63,59 @@ func removeCommand(expression resp.AnyResp) (*resp.AnyResp, error) {
 }
 
 func (s *Server) parser(con net.Conn) {
+	defer con.Close()
 	err := con.SetReadDeadline(time.Now().Add(s.config.ConnectionReadTimeout))
 	if err != nil {
 		resp.SimpleError{E: err.Error()}.MarshalRESP(con)
+		fmt.Printf("error: %s", err.Error())
+		return
 	}
 	err = con.SetWriteDeadline(time.Now().Add(s.config.ConnectionWriteTimeout))
 	if err != nil {
 		resp.SimpleError{E: err.Error()}.MarshalRESP(con)
+		fmt.Printf("error: %s", err.Error())
+		return
 	}
 	for {
-		select {
-		case <-s.close:
+		buff := make([]byte, 1024)
+		_, err := con.Read(buff)
+		if err != nil {
+			resp.SimpleError{E: err.Error()}.MarshalRESP(con)
 			return
-		default:
-			reader := bufio.NewReader(con)
-			expression := resp.AnyResp{}
-			err := expression.UnmarshalRESP(reader)
-			if err != nil {
-				resp.SimpleError{E: err.Error()}.MarshalRESP(con)
-				return
-			}
-			command, err := getCommand(&expression)
-			if err != nil {
-				resp.SimpleError{err.Error()}.MarshalRESP(con)
-			}
-			handler, ok := s.handlers[command]
-			if !ok {
-				resp.SimpleError{fmt.Sprintf("unknown command: %s", command)}.MarshalRESP(con)
-				return
-			}
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			defer con.Close()
-			var epx *resp.AnyResp
-			if epx, err = removeCommand(expression); err != nil {
-				resp.SimpleError{err.Error()}.MarshalRESP(con)
-			}
-			expression = *epx
-			fmt.Printf("request: %v\n", expression)
-			res, err := handler(ctx, &expression)
-			if err != nil {
-				resp.SimpleError{err.Error()}.MarshalRESP(con)
-			}
-			fmt.Printf("response: %v\n", res)
-			resp.AnyResp{res, false}.MarshalRESP(con)
 		}
+		reader := bufio.NewReader(bytes.NewReader(buff))
+		expression := resp.AnyResp{}
+		err = expression.UnmarshalRESP(reader)
+		fmt.Printf("expression: %v, error %v\n", expression, err)
+		if err != nil {
+			resp.SimpleError{E: err.Error()}.MarshalRESP(con)
+			return
+		}
+
+		command, err := getCommand(&expression)
+		fmt.Printf("command: %s\n", command)
+		if err != nil {
+			resp.SimpleError{err.Error()}.MarshalRESP(con)
+		}
+		handler, ok := s.handlers[command]
+		if !ok {
+			resp.SimpleError{fmt.Sprintf("unknown command: %s", command)}.MarshalRESP(con)
+			return
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		var epx *resp.AnyResp
+		if epx, err = removeCommand(expression); err != nil {
+			resp.SimpleError{err.Error()}.MarshalRESP(con)
+		}
+		expression = *epx
+		fmt.Printf("expression: %v\n", expression)
+		res, err := handler(ctx, &expression)
+		if err != nil {
+			resp.SimpleError{err.Error()}.MarshalRESP(con)
+		}
+		resp.AnyResp{res, false}.MarshalRESP(con)
+
 	}
 }
 

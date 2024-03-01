@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	TERMINATOR       = []byte("\r\n")
+	TERMINATOR       = []byte("\\r\\n")
 	SimpleStringType = []byte("+")
 	SimpleErrorType  = []byte("-")
 	SimpleIntType    = []byte(":")
@@ -143,7 +143,7 @@ type BulkString struct {
 
 func (b BulkString) MarshalRESP(w io.Writer) error {
 	if b.EncodeNil && b.S == nil {
-		_, err := w.Write([]byte("$-1\r\n"))
+		_, err := w.Write([]byte("$-1\\r\\n"))
 		return err
 	}
 
@@ -287,7 +287,6 @@ func (a AnyResp) MarshalRESP(w io.Writer) error {
 		b := BulkString{S: nil, EncodeNil: a.EncodeBulkStringNil}
 		return b.MarshalRESP(w)
 	case []interface{}:
-		fmt.Println("array")
 		var arrayPrefix = make([]byte, 0, 32)
 		arrayPrefix = append(arrayPrefix, RespArrayType...)
 		arrayPrefix = strconv.AppendInt(arrayPrefix, int64(len(v)), 10)
@@ -300,7 +299,6 @@ func (a AnyResp) MarshalRESP(w io.Writer) error {
 		_, err := w.Write(arrayBuff.Bytes())
 		return err
 	case []RespMarshaler:
-		fmt.Println("array", v)
 		arr := RespArray{A: v}
 		return arr.MarshalRESP(w)
 	}

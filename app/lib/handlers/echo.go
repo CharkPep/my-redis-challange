@@ -7,7 +7,6 @@ import (
 )
 
 func Echo(ctx context.Context, args *resp.AnyResp) (interface{}, error) {
-	fmt.Printf("Echo: %v\n", args)
 	if args == nil {
 		return fmt.Errorf("ERR wrong number of arguments for command"), nil
 	}
