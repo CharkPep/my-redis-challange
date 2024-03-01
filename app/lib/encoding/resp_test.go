@@ -16,11 +16,11 @@ func TestMarshalSimpleString(t *testing.T) {
 	tests := []test{
 		{
 			input:    SimpleString{"hello"},
-			expected: "+hello\\r\\n",
+			expected: "+hello\r\n",
 		},
 		{
 			input:    SimpleString{""},
-			expected: "+\\r\\n",
+			expected: "+\r\n",
 		},
 	}
 	for _, tc := range tests {
@@ -42,11 +42,11 @@ func TestUnmarshalSimpleString(t *testing.T) {
 	}
 	tests := []tc{
 		{
-			input:    []byte("+hello\\r\\n"),
+			input:    []byte("+hello\r\n"),
 			expected: SimpleString{"hello"},
 		},
 		{
-			input:    []byte("+\\r\\n"),
+			input:    []byte("+\r\n"),
 			expected: SimpleString{""},
 		},
 	}
@@ -71,11 +71,11 @@ func TestSimpleError_MarshalRESP(t *testing.T) {
 	tests := []test{
 		{
 			input:    SimpleError{"error"},
-			expected: "-error\\r\\n",
+			expected: "-error\r\n",
 		},
 		{
 			input:    SimpleError{""},
-			expected: "-\\r\\n",
+			expected: "-\r\n",
 		},
 	}
 	for _, tc := range tests {
@@ -97,11 +97,11 @@ func TestSimpleError_UnmarshalRESP(t *testing.T) {
 	}
 	tests := []tc{
 		{
-			input:    []byte("-error\\r\\n"),
+			input:    []byte("-error\r\n"),
 			expected: SimpleError{"error"},
 		},
 		{
-			input:    []byte("-\\r\\n"),
+			input:    []byte("-\r\n"),
 			expected: SimpleError{""},
 		},
 	}
@@ -126,15 +126,15 @@ func TestSimpleInt_MarshalRESP(t *testing.T) {
 	tests := []test{
 		{
 			input:    SimpleInt{123},
-			expected: ":123\\r\\n",
+			expected: ":123\r\n",
 		},
 		{
 			input:    SimpleInt{-123},
-			expected: ":-123\\r\\n",
+			expected: ":-123\r\n",
 		},
 		{
 			input:    SimpleInt{0},
-			expected: ":0\\r\\n",
+			expected: ":0\r\n",
 		},
 	}
 	for _, tc := range tests {
@@ -156,15 +156,15 @@ func TestSimpleInt_UnmarshalRESP(t *testing.T) {
 	}
 	tests := []tc{
 		{
-			input:    []byte(":123\\r\\n"),
+			input:    []byte(":123\r\n"),
 			expected: SimpleInt{123},
 		},
 		{
-			input:    []byte(":-123\\r\\n"),
+			input:    []byte(":-123\r\n"),
 			expected: SimpleInt{-123},
 		},
 		{
-			input:    []byte(":0\\r\\n"),
+			input:    []byte(":0\r\n"),
 			expected: SimpleInt{0},
 		},
 	}
@@ -189,15 +189,15 @@ func TestBulkString_MarshalRESP(t *testing.T) {
 	tests := []test{
 		{
 			input:    BulkString{[]byte("hello"), false},
-			expected: "$5\\r\\nhello\\r\\n",
+			expected: "$5\r\nhello\r\n",
 		},
 		{
 			input:    BulkString{[]byte(""), false},
-			expected: "$0\\r\\n\\r\\n",
+			expected: "$0\r\n\r\n",
 		},
 		{
 			input:    BulkString{nil, true},
-			expected: "$-1\\r\\n",
+			expected: "$-1\r\n",
 		},
 	}
 	for _, tc := range tests {
@@ -232,15 +232,15 @@ func TestBulkString_UnmarshalRESP(t *testing.T) {
 
 	tcs := []test{
 		{
-			input:    []byte("$5\\r\\nhello\\r\\n"),
+			input:    []byte("$5\r\nhello\r\n"),
 			expected: BulkString{[]byte("hello"), false},
 		},
 		{
-			input:    []byte("$0\\r\\n\\r\\n"),
+			input:    []byte("$0\r\n\r\n"),
 			expected: BulkString{[]byte(""), false},
 		},
 		{
-			input:    []byte("$-1\\r\\n"),
+			input:    []byte("$-1\r\n"),
 			expected: BulkString{nil, true},
 		},
 	}
@@ -275,7 +275,7 @@ func TestRespArray_MarshalRESP(t *testing.T) {
 
 	tc := []input{
 		{
-			o: []byte("*3\\r\\n$3\\r\\nfoo\\r\\n+bar\\r\\n:-1\\r\\n"),
+			o: []byte("*3\r\n$3\r\nfoo\r\n+bar\r\n:-1\r\n"),
 			input: RespArray{
 				A: []RespMarshaler{
 					BulkString{[]byte("foo"), false},
@@ -306,7 +306,7 @@ func TestRespArray_UnmarshalRESP(t *testing.T) {
 
 	tc := []input{
 		{
-			i: []byte("*3\\r\\n$3\\r\\nfoo\\r\\n+bar\\r\\n:-1\\r\\n"),
+			i: []byte("*3\r\n$3\r\nfoo\r\n+bar\r\n:-1\r\n"),
 			expected: RespArray{
 				A: []RespMarshaler{
 					BulkString{[]byte("foo"), false},
@@ -351,23 +351,23 @@ func TestSimplePrimitivesInAnyResp_UnmarshalRESP(t *testing.T) {
 
 	tests := []testCase{
 		{
-			input:    []byte("+hello\\r\\n"),
+			input:    []byte("+hello\r\n"),
 			expected: SimpleString{"hello"},
 		},
 		{
-			input:    []byte("-error\\r\\n"),
+			input:    []byte("-error\r\n"),
 			expected: SimpleError{"error"},
 		},
 		{
-			input:    []byte(":123\\r\\n"),
+			input:    []byte(":123\r\n"),
 			expected: SimpleInt{123},
 		},
 		{
-			input:    []byte("$5\\r\\nhello\\r\\n"),
+			input:    []byte("$5\r\nhello\r\n"),
 			expected: BulkString{[]byte("hello"), false},
 		},
 		{
-			input: []byte("*3\\r\\n$3\\r\\nfoo\\r\\n+bar\\r\\n:-1\\r\\n"),
+			input: []byte("*3\r\n$3\r\nfoo\r\n+bar\r\n:-1\r\n"),
 			expected: RespArray{
 				A: []RespMarshaler{
 					BulkString{[]byte("foo"), false},
@@ -398,23 +398,23 @@ func TestAnyResp_MarshalRESP(t *testing.T) {
 	tests := []test{
 		{
 			input:    AnyResp{"simple", false},
-			expected: "+simple\\r\\n",
+			expected: "+simple\r\n",
 		},
 		{
 			input:    AnyResp{"", false},
-			expected: "+\\r\\n",
+			expected: "+\r\n",
 		},
 		{
 			input:    AnyResp{errors.New("RESP error"), false},
-			expected: "-RESP error\\r\\n",
+			expected: "-RESP error\r\n",
 		},
 		{
 			input:    AnyResp{nil, true},
-			expected: "$-1\\r\\n",
+			expected: "$-1\r\n",
 		},
 		{
 			input:    AnyResp{[]byte("hello"), true},
-			expected: "$5\\r\\nhello\\r\\n",
+			expected: "$5\r\nhello\r\n",
 		},
 	}
 
@@ -445,11 +445,11 @@ func TestAnyResp_MarshalRESP2(t *testing.T) {
 	tests := []input{
 		{
 			i: []interface{}{SimpleString{"foo"}, SimpleString{"bar"}, SimpleInt{123}},
-			o: "*3\\r\\n+foo\\r\\n+bar\\r\\n:123\\r\\n",
+			o: "*3\r\n+foo\r\n+bar\r\n:123\r\n",
 		},
 		{
 			i: []interface{}{[]byte("foo"), "bar", 123},
-			o: "*3\\r\\n$3\\r\\nfoo\\r\\n+bar\\r\\n:123\\r\\n",
+			o: "*3\r\n$3\r\nfoo\r\n+bar\r\n:123\r\n",
 		},
 	}
 	for _, test := range tests {
@@ -471,23 +471,23 @@ func TestAnyResp_UnmarshalRESPAndMarshalRESP(t *testing.T) {
 	}
 	testCases := []tests{
 		{
-			input:  []byte("+hello\\r\\n"),
+			input:  []byte("+hello\r\n"),
 			output: AnyResp{SimpleString{"hello"}, false},
 		},
 		{
-			input:  []byte("-error\\r\\n"),
+			input:  []byte("-error\r\n"),
 			output: AnyResp{SimpleError{"error"}, false},
 		},
 		{
-			input:  []byte(":123\\r\\n"),
+			input:  []byte(":123\r\n"),
 			output: AnyResp{SimpleInt{123}, false},
 		},
 		{
-			input:  []byte("$5\\r\\nhello\\r\\n"),
+			input:  []byte("$5\r\nhello\r\n"),
 			output: AnyResp{BulkString{[]byte("hello"), false}, false},
 		},
 		{
-			input: []byte("*3\\r\\n$3\\r\\nfoo\\r\\n+bar\\r\\n:-1\\r\\n"),
+			input: []byte("*3\r\n$3\r\nfoo\r\n+bar\r\n:-1\r\n"),
 			output: AnyResp{RespArray{
 				A: []RespMarshaler{
 					BulkString{[]byte("foo"), false},

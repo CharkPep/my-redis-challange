@@ -111,14 +111,14 @@ func TestServerShouldReturnPong_ListenAndServer(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 	}
-	conn.Write([]byte("*1\\r\\n$4\\r\\nping\\r\\n"))
+	conn.Write([]byte("*1\r\n$4\r\nping\r\n"))
 	buf := make([]byte, 1024)
 	n, err := conn.Read(buf)
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 	}
-	if string(buf[:n]) != "+PONG\\r\\n" {
-		t.Errorf("expected +PONG\\r\\n, got %s", string(buf[:n]))
+	if string(buf[:n]) != "+PONG\r\n" {
+		t.Errorf("expected +PONG\r\n, got %s", string(buf[:n]))
 	}
 }
 
@@ -130,20 +130,20 @@ func TestServerShouldReturnEcho_ListenAndServer(t *testing.T) {
 	tests := []testCase{
 		{
 			args:   resp.RespArray{A: []resp.RespMarshaler{resp.BulkString{S: []byte("echo")}, resp.BulkString{S: []byte("foo")}}},
-			output: "*1\\r\\n$3\\r\\nfoo\\r\\n",
+			output: "*1\r\n$3\r\nfoo\r\n",
 		},
 		{
 			args: resp.RespArray{A: []resp.RespMarshaler{resp.BulkString{S: []byte("echo")},
 				resp.BulkString{S: []byte("foo")}, resp.BulkString{S: []byte("bar")}}},
-			output: "*2\\r\\n$3\\r\\nfoo\\r\\n$3\\r\\nbar\\r\\n",
+			output: "*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n",
 		},
 		{
 			args:   resp.RespArray{A: []resp.RespMarshaler{resp.BulkString{S: []byte("echo")}, resp.BulkString{S: []byte("apples")}}},
-			output: "*1\\r\\n$6\\r\\napples\\r\\n",
+			output: "*1\r\n$6\r\napples\r\n",
 		},
 		{
 			args:   resp.RespArray{A: []resp.RespMarshaler{resp.BulkString{S: []byte("echo")}}},
-			output: "$-1\\r\\n",
+			output: "$-1\r\n",
 		},
 	}
 

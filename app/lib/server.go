@@ -111,6 +111,7 @@ func (s *Server) parser(con net.Conn) {
 		expression = *epx
 		fmt.Printf("expression: %v\n", expression)
 		res, err := handler(ctx, &expression)
+		fmt.Printf("res: %v, error: %v\n", res, err)
 		if err != nil {
 			resp.SimpleError{err.Error()}.MarshalRESP(con)
 		}
