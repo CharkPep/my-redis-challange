@@ -30,7 +30,7 @@ func TestMarshalSimpleString(t *testing.T) {
 			t.Errorf("unexpected error: %s", err)
 		}
 		if b.String() != tc.expected {
-			t.Errorf("input %q, got %q", tc.expected, b.String())
+			t.Errorf("i %q, got %q", tc.expected, b.String())
 		}
 	}
 }
@@ -58,7 +58,7 @@ func TestUnmarshalSimpleString(t *testing.T) {
 			t.Errorf("unexpected error: %s", err)
 		}
 		if s != test.expected {
-			t.Errorf("input %v, got %v", test.expected, s)
+			t.Errorf("i %v, got %v", test.expected, s)
 		}
 	}
 }
@@ -85,7 +85,7 @@ func TestSimpleError_MarshalRESP(t *testing.T) {
 			t.Errorf("unexpected error: %s", err)
 		}
 		if b.String() != tc.expected {
-			t.Errorf("input %q, got %q", tc.expected, b.String())
+			t.Errorf("i %q, got %q", tc.expected, b.String())
 		}
 	}
 }
@@ -113,7 +113,7 @@ func TestSimpleError_UnmarshalRESP(t *testing.T) {
 			t.Errorf("unexpected error: %s", err)
 		}
 		if s != test.expected {
-			t.Errorf("input %v, got %v", test.expected, s)
+			t.Errorf("i %v, got %v", test.expected, s)
 		}
 	}
 }
@@ -144,7 +144,7 @@ func TestSimpleInt_MarshalRESP(t *testing.T) {
 			t.Errorf("unexpected error: %s", err)
 		}
 		if b.String() != tc.expected {
-			t.Errorf("input %q, got %q", tc.expected, b.String())
+			t.Errorf("i %q, got %q", tc.expected, b.String())
 		}
 	}
 }
@@ -176,7 +176,7 @@ func TestSimpleInt_UnmarshalRESP(t *testing.T) {
 			t.Errorf("unexpected error: %s", err)
 		}
 		if s != test.expected {
-			t.Errorf("input %v, got %v", test.expected, s)
+			t.Errorf("i %v, got %v", test.expected, s)
 		}
 	}
 }
@@ -207,7 +207,7 @@ func TestBulkString_MarshalRESP(t *testing.T) {
 			t.Errorf("unexpected error: %s", err)
 		}
 		if !CompareTwoByteSlices(b.Bytes(), []byte(tc.expected)) {
-			t.Errorf("input %q, got %q", []byte(tc.expected), b.Bytes())
+			t.Errorf("i %q, got %q", []byte(tc.expected), b.Bytes())
 		}
 	}
 }
@@ -252,7 +252,7 @@ func TestBulkString_UnmarshalRESP(t *testing.T) {
 			t.Errorf("unexpected error: %s", err)
 		}
 		if !AssertBulkString(s, tc.expected) {
-			t.Errorf("input %v, got %v", tc.expected, s)
+			t.Errorf("i %v, got %v", tc.expected, s)
 		}
 	}
 }
@@ -269,31 +269,31 @@ func AssertBulkString(a, b BulkString) bool {
 
 func TestRespArray_MarshalRESP(t *testing.T) {
 	type input struct {
-		o     []byte
-		input RespArray
+		i RespArray
+		o []byte
 	}
 
 	tc := []input{
 		{
-			o: []byte("*3\r\n$3\r\nfoo\r\n+bar\r\n:-1\r\n"),
-			input: RespArray{
+			i: RespArray{
 				A: []RespMarshaler{
 					BulkString{[]byte("foo"), false},
 					SimpleString{"bar"},
 					SimpleInt{-1},
 				},
 			},
+			o: []byte("*3\r\n$3\r\nfoo\r\n+bar\r\n:-1\r\n"),
 		},
 	}
 
 	for _, test := range tc {
 		var b bytes.Buffer
-		err := test.input.MarshalRESP(&b)
+		err := test.i.MarshalRESP(&b)
 		if err != nil {
 			t.Errorf("unexpected error: %s", err)
 		}
 		if b.String() != string(test.o) {
-			t.Errorf("input %q, got %q", test.o, b.String())
+			t.Errorf("i %q, got %q", test.o, b.String())
 		}
 	}
 }
@@ -325,7 +325,7 @@ func TestRespArray_UnmarshalRESP(t *testing.T) {
 			t.Errorf("unexpected error: %s", err)
 		}
 		if !AssertRespArray(s, test.expected) {
-			t.Errorf("input %v, got %v", test.expected, s)
+			t.Errorf("i %v, got %v", test.expected, s)
 		}
 	}
 }
@@ -385,7 +385,7 @@ func TestSimplePrimitivesInAnyResp_UnmarshalRESP(t *testing.T) {
 			t.Errorf("unexpected error: %s", err)
 		}
 		if !AssertAny(s, test.expected) {
-			t.Errorf("input %v, got %v", test.expected, s)
+			t.Errorf("i %v, got %v", test.expected, s)
 		}
 	}
 }
@@ -425,7 +425,7 @@ func TestAnyResp_MarshalRESP(t *testing.T) {
 			t.Errorf("unexpected error: %s", err)
 		}
 		if !CompareTwoByteSlices(b.Bytes(), []byte(tc.expected)) {
-			t.Errorf("input %q, got %q", tc.expected, b.String())
+			t.Errorf("i %q, got %q", tc.expected, b.String())
 		}
 	}
 }
@@ -459,7 +459,7 @@ func TestAnyResp_MarshalRESP2(t *testing.T) {
 			t.Errorf("unexpected error: %s", err)
 		}
 		if b.String() != test.o {
-			t.Errorf("input %q, got %q", test.o, b.String())
+			t.Errorf("i %q, got %q", test.o, b.String())
 		}
 	}
 }
@@ -508,7 +508,7 @@ func TestAnyResp_UnmarshalRESPAndMarshalRESP(t *testing.T) {
 			t.Errorf("unexpected error: %s", err)
 		}
 		if buff.String() != string(test.input) {
-			t.Errorf("input %q, got %q", test.input, buff.String())
+			t.Errorf("i %q, got %q", test.input, buff.String())
 		}
 
 		tUnmarshaler := reflect.TypeOf(test.output)
@@ -526,7 +526,7 @@ func TestAnyResp_UnmarshalRESPAndMarshalRESP(t *testing.T) {
 			val = val.Elem()
 		}
 		if AssertAny(val.Interface().(AnyResp), test.output) {
-			t.Errorf("input %v, got %q", test.output, val)
+			t.Errorf("i %v, got %q", test.output, val)
 		}
 
 	}

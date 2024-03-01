@@ -45,7 +45,7 @@ func peekAndAssert(r *bufio.Reader, expected []byte) error {
 		return err
 	}
 	if string(peeked) != string(expected) {
-		return fmt.Errorf("input %s, got %s", expected, peeked)
+		return fmt.Errorf("i %s, got %s", expected, peeked)
 	}
 	return nil
 
@@ -201,6 +201,7 @@ type RespArray struct {
 }
 
 func (a RespArray) MarshalRESP(w io.Writer) error {
+	fmt.Printf("a: %v\n", a.A)
 	buff := make([]byte, 0, 16)
 	buff = append(buff, RespArrayType...)
 	buff = strconv.AppendInt(buff, int64(len(a.A)), 10)
