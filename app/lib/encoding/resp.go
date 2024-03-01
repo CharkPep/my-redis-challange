@@ -143,6 +143,7 @@ type BulkString struct {
 }
 
 func (b BulkString) MarshalRESP(w io.Writer) error {
+	fmt.Println("b", string(b.S))
 	if b.EncodeNil && b.S == nil {
 		_, err := w.Write(BULK_STRING_NULL)
 		return err
@@ -158,6 +159,7 @@ func (b BulkString) MarshalRESP(w io.Writer) error {
 	buff = append(buff, TERMINATOR...)
 	buff = append(buff, b.S...)
 	buff = append(buff, TERMINATOR...)
+	fmt.Printf("buff: %s\n", string(buff))
 	_, err := w.Write(buff)
 	return err
 }
