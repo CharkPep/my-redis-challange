@@ -6,6 +6,7 @@ import (
 	"fmt"
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/storage"
+	"strconv"
 	"time"
 )
 
@@ -77,23 +78,42 @@ func parseSetArgs(args *[]resp.RespMarshaler) (*SetArgs, error) {
 				if i+1 >= len(*args) {
 					return nil, errors.New("ERR wrong number of arguments")
 				}
-				if expire, ok := ((*args)[i+1]).(resp.SimpleInt); !ok {
-					return nil, errors.New("ERR invalid expire time")
-				} else {
+				switch v := (*args)[i+1].(type) {
+				case resp.SimpleInt:
 					i++
-					expireTime := time.Now().Add(time.Duration(expire.I) * time.Second)
+					expireTime := time.Now().Add(time.Duration(v.I) * time.Second)
 					setArgs.Expire = &expireTime
+				case resp.BulkString:
+					i++
+					parsedTime, err := strconv.ParseInt(string(v.S), 10, 64)
+					if err != nil {
+						return nil, errors.New("ERR invalid expire time")
+					}
+					expireTime := time.Now().Add(time.Duration(parsedTime) * time.Second)
+					setArgs.Expire = &expireTime
+				default:
+					return nil, errors.New("ERR invalid expire time")
 				}
 			case "PX", "px":
+				fmt.Println("GOT NPX RIGHT HERE GOD DAM")
 				if i+1 >= len(*args) {
 					return nil, errors.New("ERR wrong number of arguments")
 				}
-				if expire, ok := ((*args)[i+1]).(resp.SimpleInt); !ok {
-					return nil, errors.New("ERR invalid expire time")
-				} else {
+				switch v := (*args)[i+1].(type) {
+				case resp.SimpleInt:
 					i++
-					expireTime := time.Now().Add(time.Duration(expire.I) * time.Millisecond)
+					expireTime := time.Now().Add(time.Duration(v.I) * time.Millisecond)
 					setArgs.Expire = &expireTime
+				case resp.BulkString:
+					i++
+					parsedTime, err := strconv.ParseInt(string(v.S), 10, 64)
+					if err != nil {
+						return nil, errors.New("ERR invalid expire time")
+					}
+					expireTime := time.Now().Add(time.Duration(parsedTime) * time.Millisecond)
+					setArgs.Expire = &expireTime
+				default:
+					return nil, errors.New("ERR invalid expire time")
 				}
 			case "EXAT", "exat":
 				if i+1 >= len(*args) {
@@ -169,10 +189,7 @@ func (sh StringHandler) HandleGet(ctx context.Context, args *resp.RespArray) (in
 	}
 	value, ok := sh.Storage.Get(string(key.S))
 	if !ok {
-		return nil, nil
-	}
-	if value == "" {
-		return nil, nil
+		return resp.BulkString{S: nil, EncodeNil: true}, nil
 	}
 	return value, nil
 }
