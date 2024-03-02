@@ -7,7 +7,6 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/lib/handlers"
 	"net"
 	"os"
-	"reflect"
 	"testing"
 )
 
@@ -20,82 +19,35 @@ func TestMain(m *testing.M) {
 	server.RegisterHandler("echo", handlers.Echo)
 	go server.ListenAndServe()
 	code := m.Run()
-	server.Close()
+	err = server.Close()
+	if err != nil {
+		fmt.Println("Failed to terminate")
+		os.Exit(1)
+	}
+	fmt.Println("Terminated successfully")
 	os.Exit(code)
 }
 
 func TestServer_getCommand(t *testing.T) {
 	type testCases struct {
-		input    *resp.AnyResp
+		input    []resp.RespMarshaler
 		expected string
 	}
 	tests := []testCases{
 		{
-			input:    &resp.AnyResp{I: resp.SimpleString{"hello"}},
+			input:    []resp.RespMarshaler{resp.SimpleString{"hello"}},
 			expected: "hello",
 		},
 		{
-			input:    &resp.AnyResp{I: resp.BulkString{S: []byte("hello")}},
+			input:    []resp.RespMarshaler{resp.BulkString{S: []byte("hello")}},
 			expected: "hello",
-		},
-		{
-			input: &resp.AnyResp{
-				I: resp.RespArray{
-					A: []resp.RespMarshaler{
-						resp.BulkString{[]byte("foo"), false},
-						resp.SimpleString{"bar"},
-						resp.SimpleInt{-1},
-					},
-				},
-			},
-			expected: "foo",
 		},
 	}
 	for _, test := range tests {
-		result, _ := getCommand(test.input)
+		result, _ := getCommand(&test.input)
 		if result != test.expected {
 			t.Fatalf("expected %v, got %v", test.expected, result)
 		}
-	}
-}
-
-func TestServer_removeCommand(t *testing.T) {
-	type testCases struct {
-		input    resp.AnyResp
-		expected resp.AnyResp
-	}
-	tests := []testCases{
-		{
-			input:    resp.AnyResp{I: resp.SimpleString{"hello"}},
-			expected: resp.AnyResp{I: resp.BulkString{S: nil, EncodeNil: true}, EncodeBulkStringNil: true},
-		},
-		{
-			input:    resp.AnyResp{I: resp.BulkString{S: []byte("hello")}},
-			expected: resp.AnyResp{I: resp.BulkString{S: nil, EncodeNil: true}, EncodeBulkStringNil: true},
-		},
-		{
-			input: resp.AnyResp{
-				I: resp.RespArray{
-					A: []resp.RespMarshaler{
-						resp.BulkString{[]byte("foo"), false},
-						resp.SimpleString{"bar"},
-						resp.SimpleInt{-1},
-					},
-				},
-			},
-			expected: resp.AnyResp{I: resp.RespArray{A: []resp.RespMarshaler{resp.SimpleString{"bar"}, resp.SimpleInt{-1}}}, EncodeBulkStringNil: false},
-		},
-	}
-	for _, test := range tests {
-		result, err := removeCommand(test.input)
-		if err != nil {
-			t.Errorf("unexpected error: %s", err)
-		}
-		t.Logf("Type %s, got %v, expected, %v", reflect.TypeOf(result.I), reflect.ValueOf(result.I), reflect.ValueOf(test.expected.I))
-		if !reflect.DeepEqual(result.I, test.expected.I) {
-			t.Errorf("expected %v, got %v", test.expected.I, result.I)
-		}
-
 	}
 }
 
@@ -130,20 +82,20 @@ func TestServerShouldReturnEcho_ListenAndServer(t *testing.T) {
 	tests := []testCase{
 		{
 			args:   resp.RespArray{A: []resp.RespMarshaler{resp.BulkString{S: []byte("echo")}, resp.BulkString{S: []byte("foo")}}},
-			output: "*1\r\n$3\r\nfoo\r\n",
+			output: "$3\r\nfoo\r\n",
 		},
 		{
 			args: resp.RespArray{A: []resp.RespMarshaler{resp.BulkString{S: []byte("echo")},
 				resp.BulkString{S: []byte("foo")}, resp.BulkString{S: []byte("bar")}}},
-			output: "*2\r\n$3\r\nfoo\r\n$3\r\nbar\r\n",
+			output: "$3\r\nfoo\r\n",
 		},
 		{
 			args:   resp.RespArray{A: []resp.RespMarshaler{resp.BulkString{S: []byte("echo")}, resp.BulkString{S: []byte("apples")}}},
-			output: "*1\r\n$6\r\napples\r\n",
+			output: "$6\r\napples\r\n",
 		},
 		{
 			args:   resp.RespArray{A: []resp.RespMarshaler{resp.BulkString{S: []byte("echo")}}},
-			output: "$-1\r\n",
+			output: "-ERR wrong number of arguments for command\r\n",
 		},
 	}
 

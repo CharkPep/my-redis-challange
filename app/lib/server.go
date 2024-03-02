@@ -15,7 +15,6 @@ type ServerConfig struct {
 	Port                   int
 	ConnectionReadTimeout  time.Duration
 	ConnectionWriteTimeout time.Duration
-	MaxConnections         int
 }
 
 var DefaultConfig = &ServerConfig{
@@ -23,43 +22,28 @@ var DefaultConfig = &ServerConfig{
 	Port:                   6379,
 	ConnectionReadTimeout:  time.Second * 2,
 	ConnectionWriteTimeout: time.Second * 2,
-	MaxConnections:         2000,
 }
 
 type Server struct {
 	listener net.Listener
 	close    chan struct{}
-	handlers map[string]func(ctx context.Context, args *resp.AnyResp) (interface{}, error)
+	handlers map[string]func(ctx context.Context, args *resp.RespArray) (interface{}, error)
 	config   *ServerConfig
 }
 
-func getCommand(expression *resp.AnyResp) (string, error) {
-	switch expression.I.(type) {
-	case resp.SimpleString:
-		return expression.I.(resp.SimpleString).S, nil
-	case resp.BulkString:
-		return string(expression.I.(resp.BulkString).S), nil
-	case resp.RespArray:
-		elem := expression.I.(resp.RespArray).A[0].(resp.RespMarshaler)
-		return getCommand(&resp.AnyResp{I: elem})
+func getCommand(args *[]resp.RespMarshaler) (string, error) {
+	if len(*args) == 0 {
+		return "", fmt.Errorf("empty command")
 	}
-	return "", fmt.Errorf("invalid command type: %T", expression.I)
-}
 
-func removeCommand(expression resp.AnyResp) (*resp.AnyResp, error) {
-	switch expression.I.(type) {
+	switch command := (*args)[0].(type) {
 	case resp.SimpleString:
-		return &resp.AnyResp{resp.BulkString{nil, true}, true}, nil
+		return command.S, nil
 	case resp.BulkString:
-		return &resp.AnyResp{resp.BulkString{nil, true}, true}, nil
-	case resp.RespArray:
-		elem := resp.RespArray{A: expression.I.(resp.RespArray).A[1:]}
-		if len(elem.A) == 0 {
-			return &resp.AnyResp{resp.BulkString{nil, true}, true}, nil
-		}
-		return &resp.AnyResp{I: elem}, nil
+		return string(command.S), nil
 	}
-	return nil, fmt.Errorf("invalid command type: %T", expression.I)
+
+	return "", fmt.Errorf("invalid command type: %T", (*args)[0])
 }
 
 func (s *Server) parser(con net.Conn) {
@@ -84,14 +68,13 @@ func (s *Server) parser(con net.Conn) {
 			return
 		}
 		reader := bufio.NewReader(bytes.NewReader(buff))
-		expression := resp.AnyResp{}
-		err = expression.UnmarshalRESP(reader)
+		var args resp.RespArray
+		err = args.UnmarshalRESP(reader)
 		if err != nil {
 			resp.SimpleError{E: err.Error()}.MarshalRESP(con)
 			return
 		}
-
-		command, err := getCommand(&expression)
+		command, err := getCommand(&args.A)
 		if err != nil {
 			resp.SimpleError{err.Error()}.MarshalRESP(con)
 		}
@@ -102,12 +85,8 @@ func (s *Server) parser(con net.Conn) {
 		}
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		var epx *resp.AnyResp
-		if epx, err = removeCommand(expression); err != nil {
-			resp.SimpleError{err.Error()}.MarshalRESP(con)
-		}
-		expression = *epx
-		res, err := handler(ctx, &expression)
+		args.A = args.A[1:]
+		res, err := handler(ctx, &args)
 		if err != nil {
 			resp.SimpleError{err.Error()}.MarshalRESP(con)
 		}
@@ -115,7 +94,7 @@ func (s *Server) parser(con net.Conn) {
 	}
 }
 
-func (s *Server) RegisterHandler(command string, handler func(context.Context, *resp.AnyResp) (interface{}, error)) {
+func (s *Server) RegisterHandler(command string, handler func(context.Context, *resp.RespArray) (interface{}, error)) {
 	s.handlers[command] = handler
 }
 
@@ -130,7 +109,7 @@ func New(config *ServerConfig) (*Server, error) {
 	return &Server{
 		listener: listener,
 		close:    make(chan struct{}),
-		handlers: make(map[string]func(ctx context.Context, args *resp.AnyResp) (interface{}, error)),
+		handlers: make(map[string]func(ctx context.Context, args *resp.RespArray) (interface{}, error)),
 		config:   config,
 	}, err
 }
@@ -153,5 +132,6 @@ func (s *Server) ListenAndServe() error {
 }
 
 func (s *Server) Close() error {
+	close(s.close)
 	return s.listener.Close()
 }

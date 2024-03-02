@@ -6,9 +6,10 @@ import (
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
 )
 
-func Echo(ctx context.Context, args *resp.AnyResp) (interface{}, error) {
-	if args == nil {
-		return fmt.Errorf("ERR wrong number of arguments for command"), nil
+func Echo(ctx context.Context, args *resp.RespArray) (interface{}, error) {
+	if len(args.A) < 1 || args == nil {
+		return nil, fmt.Errorf("ERR wrong number of arguments for command")
 	}
-	return args, nil
+
+	return args.A[0], nil
 }
