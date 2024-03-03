@@ -1,13 +1,49 @@
 package main
 
 import (
+	"fmt"
 	"github.com/codecrafters-io/redis-starter-go/app/lib"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/handlers"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/storage"
+	"os"
+	"strconv"
+	"time"
 )
 
+var DefaultConfig = &lib.ServerConfig{
+	Host:                   "localhost",
+	Port:                   6379,
+	ConnectionReadTimeout:  time.Second * 2,
+	ConnectionWriteTimeout: time.Second * 2,
+}
+
+const HELP = `Usage: redis-starter-go [options]
+	--port <port>		Port to listen on
+	--help			Show this help message	
+`
+
 func main() {
-	server, err := lib.New(nil)
+	args := os.Args[1:]
+	for i, v := range args {
+		switch v {
+		case "--help":
+			fmt.Println(HELP)
+			os.Exit(0)
+		case "--port", "-p":
+			if i+1 >= len(args) {
+				fmt.Println("Invalid port")
+				os.Exit(1)
+			}
+			port, err := strconv.ParseInt(args[i+1], 10, 64)
+			if err != nil {
+				fmt.Println("Invalid port")
+				os.Exit(1)
+			}
+			DefaultConfig.Port = int(port)
+		}
+	}
+	server, err := lib.New(DefaultConfig)
+
 	if err != nil {
 		panic(err)
 	}
