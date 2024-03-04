@@ -52,6 +52,14 @@ func main() {
 				os.Exit(1)
 			}
 			DefaultConfig.Port = int(port)
+		case "--replicaof":
+			if i+2 >= len(args) {
+				fmt.Println("Invalid replicaof")
+				os.Exit(1)
+			}
+			DefaultConfig.ReplicationConfig.ReplicationEnabled = true
+			DefaultConfig.ReplicationConfig.Role = "slave"
+		
 		}
 	}
 	server, err := lib.New(DefaultConfig)
