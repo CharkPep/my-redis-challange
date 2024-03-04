@@ -6,15 +6,64 @@ import (
 	"context"
 	"fmt"
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
+	"io"
 	"net"
 	"time"
 )
+
+//# Replication
+//role:master
+//connected_slaves:0
+//master_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb
+//master_repl_offset:0
+//second_repl_offset:-1
+//repl_backlog_active:0
+//repl_backlog_size:1048576
+//repl_backlog_first_byte_offset:0
+//repl_backlog_histlen:
+
+type ReplicationConfig struct {
+	ReplicationEnabled bool
+	Role               string
+	ConnectedSlaves    int
+	MasterReplid       string
+	MasterReplOffset   int
+	SecondReplOffset   int
+	ReplBacklogActive  int
+	ReplBacklogSize    int
+	ReplBacklogFirst   int
+	ReplBacklogHistlen int
+}
+
+func (r *ReplicationConfig) MarshalRESP(w io.Writer) error {
+	const format = `role:%s
+					connected_slaves:%d
+					master_replid:%s
+					master_repl_offset:%d
+					second_repl_offset:%d
+					repl_backlog_active:%d
+					repl_backlog_size:%d
+					repl_backlog_first_byte_offset:%d
+					repl_backlog_histlen:%d`
+	return resp.BulkString{S: []byte(fmt.Sprintf(format,
+		r.Role,
+		r.ConnectedSlaves,
+		r.MasterReplid,
+		r.MasterReplOffset,
+		-1,
+		r.ReplBacklogActive,
+		r.ReplBacklogSize,
+		r.ReplBacklogFirst,
+		r.ReplBacklogHistlen,
+	))}.MarshalRESP(w)
+}
 
 type ServerConfig struct {
 	Host                   string
 	Port                   int
 	ConnectionReadTimeout  time.Duration
 	ConnectionWriteTimeout time.Duration
+	ReplicationConfig      *ReplicationConfig
 }
 
 var DefaultConfig = &ServerConfig{
@@ -22,6 +71,18 @@ var DefaultConfig = &ServerConfig{
 	Port:                   6379,
 	ConnectionReadTimeout:  time.Second * 2,
 	ConnectionWriteTimeout: time.Second * 2,
+	ReplicationConfig: &ReplicationConfig{
+		ReplicationEnabled: false,
+		Role:               "master",
+		ConnectedSlaves:    0,
+		MasterReplid:       "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
+		MasterReplOffset:   0,
+		SecondReplOffset:   -1,
+		ReplBacklogActive:  0,
+		ReplBacklogSize:    1048576,
+		ReplBacklogFirst:   0,
+		ReplBacklogHistlen: 0,
+	},
 }
 
 type Server struct {
@@ -29,6 +90,22 @@ type Server struct {
 	close    chan struct{}
 	handlers map[string]func(ctx context.Context, args *resp.RespArray) (interface{}, error)
 	config   *ServerConfig
+}
+
+func (s *Server) HandleInfo(ctx context.Context, args *resp.RespArray) (interface{}, error) {
+	if len(args.A) < 1 {
+		return nil, fmt.Errorf("ERR wrong number of arguments")
+	}
+	section, ok := args.A[0].(resp.BulkString)
+	if !ok {
+		return nil, fmt.Errorf("ERR invalid section type, expected string, got %T", (args.A)[0])
+	}
+	switch string(section.S) {
+	case "replication":
+		return s.config.ReplicationConfig, nil
+	default:
+		return nil, fmt.Errorf("ERR invalid section: %s", section.S)
+	}
 }
 
 func getCommand(args *[]resp.RespMarshaler) (string, error) {

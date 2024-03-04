@@ -17,6 +17,7 @@ func TestMain(m *testing.M) {
 	}
 	server.RegisterHandler("ping", handlers.Ping)
 	server.RegisterHandler("echo", handlers.Echo)
+	server.RegisterHandler("info", server.HandleInfo)
 	go server.ListenAndServe()
 	code := m.Run()
 	err = server.Close()
@@ -125,5 +126,22 @@ func TestServerShouldReturnEcho_ListenAndServer(t *testing.T) {
 				ts.Errorf("expected %q, got %q, length %d", test.output, string(buf[:n]), n)
 			}
 		})
+	}
+}
+
+func TestServer_HandleInfoShouldRespond(t *testing.T) {
+	conn, err := net.Dial("tcp", "localhost:6379")
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+	}
+	conn.Write([]byte("*2\r\n$4\r\ninfo\r\n$11\r\nreplication\r\n"))
+	buf := make([]byte, 1024)
+	n, err := conn.Read(buf)
+	t.Logf("%q", string(buf[:n]))
+	if err != nil {
+		t.Errorf("unexpected error: %s", err)
+	}
+	if n == 0 {
+		t.Errorf("expected something, got nothing")
 	}
 }

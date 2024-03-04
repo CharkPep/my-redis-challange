@@ -15,6 +15,18 @@ var DefaultConfig = &lib.ServerConfig{
 	Port:                   6379,
 	ConnectionReadTimeout:  time.Second * 2,
 	ConnectionWriteTimeout: time.Second * 2,
+	ReplicationConfig: &lib.ReplicationConfig{
+		ReplicationEnabled: false,
+		Role:               "master",
+		ConnectedSlaves:    0,
+		MasterReplid:       "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
+		MasterReplOffset:   0,
+		SecondReplOffset:   -1,
+		ReplBacklogActive:  0,
+		ReplBacklogSize:    1048576,
+		ReplBacklogFirst:   0,
+		ReplBacklogHistlen: 0,
+	},
 }
 
 const HELP = `Usage: redis-starter-go [options]
@@ -61,6 +73,8 @@ func main() {
 	server.RegisterHandler("SET", stringsHandler.HandleSet)
 	server.RegisterHandler("get", stringsHandler.HandleGet)
 	server.RegisterHandler("GET", stringsHandler.HandleGet)
+	server.RegisterHandler("info", server.HandleInfo)
+	server.RegisterHandler("INFO", server.HandleInfo)
 	defer server.Close()
 	server.ListenAndServe()
 }
