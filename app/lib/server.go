@@ -7,6 +7,7 @@ import (
 	"fmt"
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
 	"io"
+	"math/rand"
 	"net"
 	"time"
 )
@@ -25,6 +26,7 @@ import (
 type ReplicationConfig struct {
 	ReplicationEnabled bool
 	Role               string
+	//TODO change to int64
 	ConnectedSlaves    int
 	MasterReplid       string
 	MasterReplOffset   int
@@ -75,7 +77,6 @@ var DefaultConfig = &ServerConfig{
 		ReplicationEnabled: false,
 		Role:               "master",
 		ConnectedSlaves:    0,
-		MasterReplid:       "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
 		MasterReplOffset:   0,
 		SecondReplOffset:   -1,
 		ReplBacklogActive:  0,
@@ -88,11 +89,19 @@ var DefaultConfig = &ServerConfig{
 type Server struct {
 	listener net.Listener
 	close    chan struct{}
-	handlers map[string]func(ctx context.Context, args *resp.RespArray) (interface{}, error)
+	handlers map[string]func(ctx context.Context, args *resp.Array) (interface{}, error)
 	config   *ServerConfig
 }
 
-func (s *Server) HandleInfo(ctx context.Context, args *resp.RespArray) (interface{}, error) {
+func randomAlphanumericString(w io.Writer, len int) {
+	source := rand.New(rand.NewSource(time.Now().UnixNano()))
+	for i := 0; i < len; i++ {
+		chars := []byte{uint8(source.Intn(26) + 65), uint8(source.Intn(26) + 97), uint8(source.Intn(10) + 48)}
+		w.Write([]byte{chars[source.Intn(3)]})
+	}
+}
+
+func (s *Server) HandleInfo(ctx context.Context, args *resp.Array) (interface{}, error) {
 	if len(args.A) < 1 {
 		return nil, fmt.Errorf("ERR wrong number of arguments")
 	}
@@ -108,7 +117,7 @@ func (s *Server) HandleInfo(ctx context.Context, args *resp.RespArray) (interfac
 	}
 }
 
-func getCommand(args *[]resp.RespMarshaler) (string, error) {
+func getCommand(args *[]resp.Marshaller) (string, error) {
 	if len(*args) == 0 {
 		return "", fmt.Errorf("empty command")
 	}
@@ -145,7 +154,7 @@ func (s *Server) parser(con net.Conn) {
 			return
 		}
 		reader := bufio.NewReader(bytes.NewReader(buff))
-		var args resp.RespArray
+		var args resp.Array
 		err = args.UnmarshalRESP(reader)
 		if err != nil {
 			resp.SimpleError{E: err.Error()}.MarshalRESP(con)
@@ -171,11 +180,16 @@ func (s *Server) parser(con net.Conn) {
 	}
 }
 
-func (s *Server) RegisterHandler(command string, handler func(context.Context, *resp.RespArray) (interface{}, error)) {
+func (s *Server) RegisterHandler(command string, handler func(context.Context, *resp.Array) (interface{}, error)) {
 	s.handlers[command] = handler
 }
 
 func New(config *ServerConfig) (*Server, error) {
+	if config.ReplicationConfig != nil {
+		replID := bytes.NewBuffer(make([]byte, 40))
+		randomAlphanumericString(replID, 40)
+		config.ReplicationConfig.MasterReplid = string(replID.Bytes())
+	}
 	if config == nil {
 		config = DefaultConfig
 	}
@@ -186,7 +200,7 @@ func New(config *ServerConfig) (*Server, error) {
 	return &Server{
 		listener: listener,
 		close:    make(chan struct{}),
-		handlers: make(map[string]func(ctx context.Context, args *resp.RespArray) (interface{}, error)),
+		handlers: make(map[string]func(ctx context.Context, args *resp.Array) (interface{}, error)),
 		config:   config,
 	}, err
 }

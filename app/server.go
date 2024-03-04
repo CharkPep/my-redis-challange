@@ -29,9 +29,11 @@ var DefaultConfig = &lib.ServerConfig{
 	},
 }
 
-const HELP = `Usage: redis-starter-go [options]
-	--port <port>		Port to listen on
-	--help			Show this help message	
+const HELP = `
+Usage: <build> [options]
+--port <port>			Port to listen on
+--help				Show this help message	
+--replicaof <host> <port>	Make the server a slave of another instance
 `
 
 func main() {
@@ -39,11 +41,11 @@ func main() {
 	for i, v := range args {
 		switch v {
 		case "--help":
-			fmt.Println(HELP)
+			fmt.Printf(HELP)
 			os.Exit(0)
 		case "--port", "-p":
 			if i+1 >= len(args) {
-				fmt.Println("Invalid port")
+				fmt.Printf("Invalid port")
 				os.Exit(1)
 			}
 			port, err := strconv.ParseInt(args[i+1], 10, 64)
@@ -59,7 +61,7 @@ func main() {
 			}
 			DefaultConfig.ReplicationConfig.ReplicationEnabled = true
 			DefaultConfig.ReplicationConfig.Role = "slave"
-		
+
 		}
 	}
 	server, err := lib.New(DefaultConfig)

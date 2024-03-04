@@ -10,19 +10,19 @@ import (
 
 var (
 	TERMINATOR       = []byte("\r\n")
-	BULK_STRING_NULL = []byte("$-1\r\n")
+	BULKSTRINGNULL   = []byte("$-1\r\n")
 	SimpleStringType = []byte("+")
 	SimpleErrorType  = []byte("-")
 	SimpleIntType    = []byte(":")
 	BulkStringType   = []byte("$")
-	RespArrayType    = []byte("*")
+	ArrayType        = []byte("*")
 )
 
-type RespMarshaler interface {
+type Marshaller interface {
 	MarshalRESP(w io.Writer) error
 }
 
-type RespUnmarshaler interface {
+type Unmarshaler interface {
 	UnmarshalRESP(r *bufio.Reader) error
 }
 
@@ -144,7 +144,7 @@ type BulkString struct {
 
 func (b BulkString) MarshalRESP(w io.Writer) error {
 	if b.EncodeNil && b.S == nil {
-		_, err := w.Write(BULK_STRING_NULL)
+		_, err := w.Write(BULKSTRINGNULL)
 		return err
 	}
 
@@ -196,13 +196,13 @@ func (b *BulkString) UnmarshalRESP(r *bufio.Reader) error {
 	return err
 }
 
-type RespArray struct {
-	A []RespMarshaler
+type Array struct {
+	A []Marshaller
 }
 
-func (a RespArray) MarshalRESP(w io.Writer) error {
+func (a Array) MarshalRESP(w io.Writer) error {
 	buff := make([]byte, 0, 64)
-	buff = append(buff, RespArrayType...)
+	buff = append(buff, ArrayType...)
 	buff = strconv.AppendInt(buff, int64(len(a.A)), 10)
 	buff = append(buff, TERMINATOR...)
 	elementsBuff := bytes.NewBuffer(make([]byte, 0, 64))
@@ -213,17 +213,16 @@ func (a RespArray) MarshalRESP(w io.Writer) error {
 		}
 	}
 	buff = append(buff, elementsBuff.Bytes()...)
-	fmt.Printf("Resp array buffer to be written: %q, %d\n", string(buff), len(buff))
 	_, err := w.Write(buff)
 	return err
 }
 
-func (a *RespArray) UnmarshalRESP(r *bufio.Reader) error {
-	if err := peekAndAssert(r, RespArrayType); err != nil {
+func (a *Array) UnmarshalRESP(r *bufio.Reader) error {
+	if err := peekAndAssert(r, ArrayType); err != nil {
 		return err
 	}
 
-	_, err := r.Discard(len(RespArrayType))
+	_, err := r.Discard(len(ArrayType))
 	str, err := r.ReadSlice(TERMINATOR[0])
 	if err != nil {
 		return err
@@ -236,14 +235,14 @@ func (a *RespArray) UnmarshalRESP(r *bufio.Reader) error {
 	if _, err = r.Discard(len(TERMINATOR) - 1); err != nil {
 		return err
 	}
-	a.A = make([]RespMarshaler, length)
+	a.A = make([]Marshaller, length)
 	for i := 0; i < int(length); i++ {
-		var any AnyResp
-		err := any.UnmarshalRESP(r)
+		var resp AnyResp
+		err := resp.UnmarshalRESP(r)
 		if err != nil {
 			return err
 		}
-		a.A[i] = any.I.(RespMarshaler)
+		a.A[i] = resp.I.(Marshaller)
 	}
 	return nil
 }
@@ -271,7 +270,7 @@ func convertAnyIntToInt64(a interface{}) int64 {
 
 func (a AnyResp) MarshalRESP(w io.Writer) error {
 	switch v := a.I.(type) {
-	case RespMarshaler:
+	case Marshaller:
 		return v.MarshalRESP(w)
 	case int, int8, int16, int32, int64:
 		i := SimpleInt{I: convertAnyIntToInt64(v)}
@@ -290,18 +289,20 @@ func (a AnyResp) MarshalRESP(w io.Writer) error {
 		return b.MarshalRESP(w)
 	case []interface{}:
 		var arrayPrefix = make([]byte, 0, 32)
-		arrayPrefix = append(arrayPrefix, RespArrayType...)
+		arrayPrefix = append(arrayPrefix, ArrayType...)
 		arrayPrefix = strconv.AppendInt(arrayPrefix, int64(len(v)), 10)
 		arrayPrefix = append(arrayPrefix, TERMINATOR...)
 		arrayBuff := bytes.NewBuffer(arrayPrefix)
 		for _, i := range v {
-			any := AnyResp{I: i}
-			any.MarshalRESP(arrayBuff)
+			resp := AnyResp{I: i}
+			if err := resp.MarshalRESP(arrayBuff); err != nil {
+				return err
+			}
 		}
 		_, err := w.Write(arrayBuff.Bytes())
 		return err
-	case []RespMarshaler:
-		arr := RespArray{A: v}
+	case []Marshaller:
+		arr := Array{A: v}
 		return arr.MarshalRESP(w)
 	}
 
@@ -342,8 +343,8 @@ func (a *AnyResp) UnmarshalRESP(r *bufio.Reader) error {
 			return err
 		}
 		a.I = b
-	case RespArrayType[0]:
-		var arr RespArray
+	case ArrayType[0]:
+		var arr Array
 		err = arr.UnmarshalRESP(r)
 		if err != nil {
 			return err

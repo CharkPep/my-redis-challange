@@ -269,14 +269,14 @@ func AssertBulkString(a, b BulkString) bool {
 
 func TestRespArray_MarshalRESP(t *testing.T) {
 	type input struct {
-		i RespArray
+		i Array
 		o []byte
 	}
 
 	tc := []input{
 		{
-			i: RespArray{
-				A: []RespMarshaler{
+			i: Array{
+				A: []Marshaller{
 					BulkString{[]byte("foo"), false},
 					SimpleString{"bar"},
 					SimpleInt{-1},
@@ -301,14 +301,14 @@ func TestRespArray_MarshalRESP(t *testing.T) {
 func TestRespArray_UnmarshalRESP(t *testing.T) {
 	type input struct {
 		i        []byte
-		expected RespArray
+		expected Array
 	}
 
 	tc := []input{
 		{
 			i: []byte("*3\r\n$3\r\nfoo\r\n+bar\r\n:-1\r\n"),
-			expected: RespArray{
-				A: []RespMarshaler{
+			expected: Array{
+				A: []Marshaller{
 					BulkString{[]byte("foo"), false},
 					SimpleString{"bar"},
 					SimpleInt{-1},
@@ -318,7 +318,7 @@ func TestRespArray_UnmarshalRESP(t *testing.T) {
 	}
 
 	for _, test := range tc {
-		var s RespArray
+		var s Array
 		r := bufio.NewReader(bytes.NewReader(test.i))
 		err := s.UnmarshalRESP(r)
 		if err != nil {
@@ -330,7 +330,7 @@ func TestRespArray_UnmarshalRESP(t *testing.T) {
 	}
 }
 
-func AssertRespArray(a RespArray, b RespArray) bool {
+func AssertRespArray(a Array, b Array) bool {
 	if len(a.A) != len(b.A) {
 		return false
 	}
@@ -346,7 +346,7 @@ func AssertRespArray(a RespArray, b RespArray) bool {
 func TestSimplePrimitivesInAnyResp_UnmarshalRESP(t *testing.T) {
 	type testCase struct {
 		input    []byte
-		expected RespMarshaler
+		expected Marshaller
 	}
 
 	tests := []testCase{
@@ -368,8 +368,8 @@ func TestSimplePrimitivesInAnyResp_UnmarshalRESP(t *testing.T) {
 		},
 		{
 			input: []byte("*3\r\n$3\r\nfoo\r\n+bar\r\n:-1\r\n"),
-			expected: RespArray{
-				A: []RespMarshaler{
+			expected: Array{
+				A: []Marshaller{
 					BulkString{[]byte("foo"), false},
 					SimpleString{"bar"},
 					SimpleInt{-1},
@@ -430,7 +430,7 @@ func TestAnyResp_MarshalRESP(t *testing.T) {
 	}
 }
 
-func AssertAny(a AnyResp, b RespMarshaler) bool {
+func AssertAny(a AnyResp, b Marshaller) bool {
 	if reflect.DeepEqual(a.I, b) {
 		return true
 	}
@@ -488,8 +488,8 @@ func TestAnyResp_UnmarshalRESPAndMarshalRESP(t *testing.T) {
 		},
 		{
 			input: []byte("*3\r\n$3\r\nfoo\r\n+bar\r\n:-1\r\n"),
-			output: AnyResp{RespArray{
-				A: []RespMarshaler{
+			output: AnyResp{Array{
+				A: []Marshaller{
 					BulkString{[]byte("foo"), false},
 					SimpleString{"bar"},
 					SimpleInt{-1},
@@ -512,7 +512,7 @@ func TestAnyResp_UnmarshalRESPAndMarshalRESP(t *testing.T) {
 		}
 
 		tUnmarshaler := reflect.TypeOf(test.output)
-		unmarshaled, ok := reflect.New(tUnmarshaler).Interface().(RespUnmarshaler)
+		unmarshaled, ok := reflect.New(tUnmarshaler).Interface().(Unmarshaler)
 		if !ok {
 			t.Errorf("unexpected error: %s", err)
 		}

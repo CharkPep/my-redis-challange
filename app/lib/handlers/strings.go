@@ -23,7 +23,7 @@ type SetArgs struct {
 	GET    bool
 }
 
-func parseSetArgs(args *[]resp.RespMarshaler) (*SetArgs, error) {
+func parseSetArgs(args *[]resp.Marshaller) (*SetArgs, error) {
 	if len(*args) < 2 {
 		return nil, errors.New("ERR wrong number of arguments")
 	}
@@ -151,7 +151,7 @@ func parseSetArgs(args *[]resp.RespMarshaler) (*SetArgs, error) {
 	return &setArgs, nil
 }
 
-func (sh StringHandler) HandleSet(ctx context.Context, args *resp.RespArray) (interface{}, error) {
+func (sh StringHandler) HandleSet(ctx context.Context, args *resp.Array) (interface{}, error) {
 	setArgs, err := parseSetArgs(&args.A)
 	if err != nil {
 		return nil, err
@@ -179,7 +179,7 @@ func (sh StringHandler) HandleSet(ctx context.Context, args *resp.RespArray) (in
 	return "OK", err
 }
 
-func (sh StringHandler) HandleGet(ctx context.Context, args *resp.RespArray) (interface{}, error) {
+func (sh StringHandler) HandleGet(ctx context.Context, args *resp.Array) (interface{}, error) {
 	if len(args.A) != 1 {
 		return nil, fmt.Errorf("ERR wrong number of arguments")
 	}

@@ -8,7 +8,7 @@ import (
 
 func TestParseSetArgs(t *testing.T) {
 	type testCase struct {
-		input     []resp.RespMarshaler
+		input     []resp.Marshaller
 		expected  *SetArgs
 		isToThrow bool
 		error     string
@@ -16,7 +16,7 @@ func TestParseSetArgs(t *testing.T) {
 
 	tests := []testCase{
 		{
-			input: []resp.RespMarshaler{resp.SimpleString{"key"}, resp.SimpleString{"value"}},
+			input: []resp.Marshaller{resp.SimpleString{"key"}, resp.SimpleString{"value"}},
 			expected: &SetArgs{
 				Key:   "key",
 				Value: "value",
@@ -25,7 +25,7 @@ func TestParseSetArgs(t *testing.T) {
 			isToThrow: false,
 		},
 		{
-			input: []resp.RespMarshaler{
+			input: []resp.Marshaller{
 				resp.BulkString{S: []byte("key")},
 				resp.BulkString{S: []byte("value")},
 				resp.BulkString{S: []byte("NX")}},
@@ -36,7 +36,7 @@ func TestParseSetArgs(t *testing.T) {
 			},
 		},
 		{
-			input: []resp.RespMarshaler{
+			input: []resp.Marshaller{
 				resp.BulkString{S: []byte("key")},
 				resp.BulkString{S: []byte("value")},
 				resp.BulkString{S: []byte("XX")},
@@ -48,7 +48,7 @@ func TestParseSetArgs(t *testing.T) {
 			},
 		},
 		{
-			input: []resp.RespMarshaler{
+			input: []resp.Marshaller{
 				resp.BulkString{S: []byte("key")},
 				resp.BulkString{S: []byte("value")},
 				resp.BulkString{S: []byte("XX")},
@@ -80,14 +80,14 @@ func TestParseSetArgs(t *testing.T) {
 
 func TestParseSetArgsExpire(t *testing.T) {
 	type testCase struct {
-		input    []resp.RespMarshaler
+		input    []resp.Marshaller
 		expected *SetArgs
 		expiry   time.Duration
 	}
 
 	tests := []testCase{
 		{
-			input: []resp.RespMarshaler{
+			input: []resp.Marshaller{
 				resp.BulkString{S: []byte("key")},
 				resp.BulkString{S: []byte("value")},
 				resp.BulkString{S: []byte("EX")},
@@ -101,7 +101,7 @@ func TestParseSetArgsExpire(t *testing.T) {
 			expiry: time.Second * 10,
 		},
 		{
-			input: []resp.RespMarshaler{
+			input: []resp.Marshaller{
 				resp.BulkString{S: []byte("key")},
 				resp.BulkString{S: []byte("value")},
 				resp.BulkString{S: []byte("PX")},
@@ -115,7 +115,7 @@ func TestParseSetArgsExpire(t *testing.T) {
 			expiry: time.Millisecond * 10,
 		},
 		{
-			input: []resp.RespMarshaler{
+			input: []resp.Marshaller{
 				resp.BulkString{S: []byte("key")},
 				resp.BulkString{S: []byte("value")},
 				resp.BulkString{S: []byte("EXAT")},
@@ -129,7 +129,7 @@ func TestParseSetArgsExpire(t *testing.T) {
 			expiry: time.Second * 10,
 		},
 		{
-			input: []resp.RespMarshaler{
+			input: []resp.Marshaller{
 				resp.BulkString{S: []byte("key")},
 				resp.BulkString{S: []byte("value")},
 				resp.BulkString{S: []byte("PXAT")},

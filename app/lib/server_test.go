@@ -31,16 +31,16 @@ func TestMain(m *testing.M) {
 
 func TestServer_getCommand(t *testing.T) {
 	type testCases struct {
-		input    []resp.RespMarshaler
+		input    []resp.Marshaller
 		expected string
 	}
 	tests := []testCases{
 		{
-			input:    []resp.RespMarshaler{resp.SimpleString{"hello"}},
+			input:    []resp.Marshaller{resp.SimpleString{"hello"}},
 			expected: "hello",
 		},
 		{
-			input:    []resp.RespMarshaler{resp.BulkString{S: []byte("hello")}},
+			input:    []resp.Marshaller{resp.BulkString{S: []byte("hello")}},
 			expected: "hello",
 		},
 	}
@@ -77,25 +77,25 @@ func TestServerShouldReturnPong_ListenAndServer(t *testing.T) {
 
 func TestServerShouldReturnEcho_ListenAndServer(t *testing.T) {
 	type testCase struct {
-		args   resp.RespMarshaler
+		args   resp.Marshaller
 		output string
 	}
 	tests := []testCase{
 		{
-			args:   resp.RespArray{A: []resp.RespMarshaler{resp.BulkString{S: []byte("echo")}, resp.BulkString{S: []byte("foo")}}},
+			args:   resp.Array{A: []resp.Marshaller{resp.BulkString{S: []byte("echo")}, resp.BulkString{S: []byte("foo")}}},
 			output: "$3\r\nfoo\r\n",
 		},
 		{
-			args: resp.RespArray{A: []resp.RespMarshaler{resp.BulkString{S: []byte("echo")},
+			args: resp.Array{A: []resp.Marshaller{resp.BulkString{S: []byte("echo")},
 				resp.BulkString{S: []byte("foo")}, resp.BulkString{S: []byte("bar")}}},
 			output: "$3\r\nfoo\r\n",
 		},
 		{
-			args:   resp.RespArray{A: []resp.RespMarshaler{resp.BulkString{S: []byte("echo")}, resp.BulkString{S: []byte("apples")}}},
+			args:   resp.Array{A: []resp.Marshaller{resp.BulkString{S: []byte("echo")}, resp.BulkString{S: []byte("apples")}}},
 			output: "$6\r\napples\r\n",
 		},
 		{
-			args:   resp.RespArray{A: []resp.RespMarshaler{resp.BulkString{S: []byte("echo")}}},
+			args:   resp.Array{A: []resp.Marshaller{resp.BulkString{S: []byte("echo")}}},
 			output: "-ERR wrong number of arguments for command\r\n",
 		},
 	}
@@ -143,5 +143,22 @@ func TestServer_HandleInfoShouldRespond(t *testing.T) {
 	}
 	if n == 0 {
 		t.Errorf("expected something, got nothing")
+	}
+}
+
+// Does not care just for testing
+func BenchmarkRandomStringGenerator(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		w := bytes.NewBuffer(make([]byte, 0, 10))
+		randomAlphanumericString(w, 10)
+		if len(w.Bytes()) != 10 {
+			b.Errorf("expected 10, got %d", len(w.Bytes()))
+		}
+
+		for _, c := range w.Bytes() {
+			if (c < '0' || c > '9') && (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') {
+				b.Errorf("expected alphanumeric, got %q", c)
+			}
+		}
 	}
 }
