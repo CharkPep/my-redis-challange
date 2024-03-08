@@ -10,6 +10,7 @@ import (
 	"io"
 	"math/rand"
 	"net"
+	"strconv"
 	"time"
 )
 
@@ -49,6 +50,7 @@ type Server struct {
 	handlers map[string]func(ctx context.Context, args *resp.Array) (interface{}, error)
 	config   *ServerConfig
 	replOf   *repl.ReplicaOf
+	replicas map[int]*repl.Replica
 }
 
 func randomAlphanumericString(w io.Writer, len int) {
@@ -73,6 +75,35 @@ func (s *Server) HandleInfo(ctx context.Context, args *resp.Array) (interface{},
 	default:
 		return nil, fmt.Errorf("ERR invalid section: %s", section.S)
 	}
+}
+
+func (s *Server) HandleReplConf(ctx context.Context, args *resp.Array) (interface{}, error) {
+	switch v := args.A[0].(type) {
+	case resp.BulkString:
+		switch string(v.S) {
+		case "listening-port":
+			if len(args.A) < 2 {
+				return nil, fmt.Errorf("ERR wrong number of arguments for command")
+			}
+			port, ok := args.A[1].(resp.BulkString)
+			if !ok {
+				return nil, fmt.Errorf("ERR invalid port type, expected string, got %T", args.A[1])
+			}
+			portNum, err := strconv.ParseInt(string(port.S), 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("ERR invalid port: %s", err)
+			}
+			conn, ok := ctx.Value("conn").(net.Conn).(*net.TCPConn)
+			if !ok {
+				return nil, fmt.Errorf("ERR invalid connection type, expected *net.TCPConn, got %T", conn)
+			}
+			s.replicas[int(portNum)] = repl.NewReplica(conn.RemoteAddr().String(), int(portNum))
+			return "OK", nil
+		case "capa":
+			return "OK", nil
+		}
+	}
+	return nil, fmt.Errorf("ERR invalid command")
 }
 
 func getCommand(args *[]resp.Marshaller) (string, error) {
@@ -127,7 +158,7 @@ func (s *Server) parser(con net.Conn) {
 			resp.SimpleError{fmt.Sprintf("unknown command: %s", command)}.MarshalRESP(con)
 			return
 		}
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(context.WithValue(context.Background(), "conn", con))
 		defer cancel()
 		args.A = args.A[1:]
 		res, err := handler(ctx, &args)
@@ -159,6 +190,7 @@ func New(config *ServerConfig) (*Server, error) {
 	return &Server{
 		listener: listener,
 		close:    make(chan struct{}),
+		replicas: make(map[int]*repl.Replica),
 		handlers: make(map[string]func(ctx context.Context, args *resp.Array) (interface{}, error)),
 		config:   config,
 	}, err

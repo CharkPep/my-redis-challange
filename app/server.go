@@ -76,6 +76,8 @@ func main() {
 	server.RegisterHandler("GET", stringsHandler.HandleGet)
 	server.RegisterHandler("info", server.HandleInfo)
 	server.RegisterHandler("INFO", server.HandleInfo)
+	server.RegisterHandler("replconf", server.HandleReplConf)
+	server.RegisterHandler("REPLCONF", server.HandleReplConf)
 	defer server.Close()
 	server.ListenAndServe()
 }
