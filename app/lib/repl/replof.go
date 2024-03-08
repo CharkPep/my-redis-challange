@@ -21,6 +21,7 @@ func NewReplicaOf(host string, remotePort, listeningPort int) (*ReplicaOf, error
 		return nil, err
 	}
 
+	defer conn.Close()
 	repl := &ReplicaOf{
 		conn: conn,
 		host: host,
@@ -35,6 +36,11 @@ func NewReplicaOf(host string, remotePort, listeningPort int) (*ReplicaOf, error
 	if err = repl.replConfCapa(); err != nil {
 		return nil, err
 	}
+
+	if err = repl.pSync(); err != nil {
+		return nil, err
+	}
+
 	return repl, nil
 }
 
@@ -86,5 +92,18 @@ func (r *ReplicaOf) replConfCapa() error {
 	if string(buf[:n]) != "+OK\r\n" {
 		return fmt.Errorf("expected OK, got %q", string(buf))
 	}
+	return nil
+}
+
+func (r *ReplicaOf) pSync() error {
+	var err error
+	if err = (resp.Array{A: []resp.Marshaller{resp.BulkString{S: []byte("PSYNC")}, resp.BulkString{S: []byte("?")}, resp.BulkString{S: []byte("-1")}}}.MarshalRESP(r.conn)); err != nil {
+		return err
+	}
+	buf := make([]byte, 16)
+	if _, err = r.conn.Read(buf); err != nil {
+		return err
+	}
+
 	return nil
 }
