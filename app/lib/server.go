@@ -6,66 +6,24 @@ import (
 	"context"
 	"fmt"
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
+	"github.com/codecrafters-io/redis-starter-go/app/lib/repl"
 	"io"
 	"math/rand"
 	"net"
 	"time"
 )
 
-//# Replication
-//role:master
-//connected_slaves:0
-//master_replid:8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb
-//master_repl_offset:0
-//second_repl_offset:-1
-//repl_backlog_active:0
-//repl_backlog_size:1048576
-//repl_backlog_first_byte_offset:0
-//repl_backlog_histlen:
-
-type ReplicationConfig struct {
-	ReplicationEnabled bool
-	Role               string
-	//TODO change to int64
-	ConnectedSlaves    int
-	MasterReplid       string
-	MasterReplOffset   int
-	SecondReplOffset   int
-	ReplBacklogActive  int
-	ReplBacklogSize    int
-	ReplBacklogFirst   int
-	ReplBacklogHistlen int
-}
-
-func (r *ReplicationConfig) MarshalRESP(w io.Writer) error {
-	const format = `role:%s
-					connected_slaves:%d
-					master_replid:%s
-					master_repl_offset:%d
-					second_repl_offset:%d
-					repl_backlog_active:%d
-					repl_backlog_size:%d
-					repl_backlog_first_byte_offset:%d
-					repl_backlog_histlen:%d`
-	return resp.BulkString{S: []byte(fmt.Sprintf(format,
-		r.Role,
-		r.ConnectedSlaves,
-		r.MasterReplid,
-		r.MasterReplOffset,
-		-1,
-		r.ReplBacklogActive,
-		r.ReplBacklogSize,
-		r.ReplBacklogFirst,
-		r.ReplBacklogHistlen,
-	))}.MarshalRESP(w)
-}
-
 type ServerConfig struct {
 	Host                   string
 	Port                   int
 	ConnectionReadTimeout  time.Duration
 	ConnectionWriteTimeout time.Duration
-	ReplicationConfig      *ReplicationConfig
+	ReplicationConfig      *repl.ReplicationConfig
+	ReplicaOf              *repl.ReplicaOf
+}
+
+func GetDefaultConfig() *ServerConfig {
+	return DefaultConfig
 }
 
 var DefaultConfig = &ServerConfig{
@@ -73,8 +31,7 @@ var DefaultConfig = &ServerConfig{
 	Port:                   6379,
 	ConnectionReadTimeout:  time.Second * 2,
 	ConnectionWriteTimeout: time.Second * 2,
-	ReplicationConfig: &ReplicationConfig{
-		ReplicationEnabled: false,
+	ReplicationConfig: &repl.ReplicationConfig{
 		Role:               "master",
 		ConnectedSlaves:    0,
 		MasterReplOffset:   0,
@@ -91,6 +48,7 @@ type Server struct {
 	close    chan struct{}
 	handlers map[string]func(ctx context.Context, args *resp.Array) (interface{}, error)
 	config   *ServerConfig
+	replOf   *repl.ReplicaOf
 }
 
 func randomAlphanumericString(w io.Writer, len int) {
@@ -185,13 +143,14 @@ func (s *Server) RegisterHandler(command string, handler func(context.Context, *
 }
 
 func New(config *ServerConfig) (*Server, error) {
+	if config == nil {
+		config = DefaultConfig
+	}
+
 	if config.ReplicationConfig != nil {
 		replID := bytes.NewBuffer(make([]byte, 40))
 		randomAlphanumericString(replID, 40)
 		config.ReplicationConfig.MasterReplid = string(replID.Bytes())
-	}
-	if config == nil {
-		config = DefaultConfig
 	}
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.Host, config.Port))
 	if err != nil {

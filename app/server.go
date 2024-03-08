@@ -4,30 +4,11 @@ import (
 	"fmt"
 	"github.com/codecrafters-io/redis-starter-go/app/lib"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/handlers"
+	"github.com/codecrafters-io/redis-starter-go/app/lib/repl"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/storage"
 	"os"
 	"strconv"
-	"time"
 )
-
-var DefaultConfig = &lib.ServerConfig{
-	Host:                   "localhost",
-	Port:                   6379,
-	ConnectionReadTimeout:  time.Second * 2,
-	ConnectionWriteTimeout: time.Second * 2,
-	ReplicationConfig: &lib.ReplicationConfig{
-		ReplicationEnabled: false,
-		Role:               "master",
-		ConnectedSlaves:    0,
-		MasterReplid:       "8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
-		MasterReplOffset:   0,
-		SecondReplOffset:   -1,
-		ReplBacklogActive:  0,
-		ReplBacklogSize:    1048576,
-		ReplBacklogFirst:   0,
-		ReplBacklogHistlen: 0,
-	},
-}
 
 const HELP = `
 Usage: <build> [options]
@@ -37,6 +18,7 @@ Usage: <build> [options]
 `
 
 func main() {
+	config := lib.GetDefaultConfig()
 	args := os.Args[1:]
 	for i, v := range args {
 		switch v {
@@ -53,18 +35,27 @@ func main() {
 				fmt.Println("Invalid port")
 				os.Exit(1)
 			}
-			DefaultConfig.Port = int(port)
+			config.Port = int(port)
 		case "--replicaof":
 			if i+2 >= len(args) {
 				fmt.Println("Invalid replicaof")
 				os.Exit(1)
 			}
-			DefaultConfig.ReplicationConfig.ReplicationEnabled = true
-			DefaultConfig.ReplicationConfig.Role = "slave"
-
+			config.ReplicationConfig.Role = "slave"
+			port, err := strconv.ParseInt(args[i+2], 10, 64)
+			if err != nil {
+				fmt.Println("Invalid port")
+				os.Exit(1)
+			}
+			repl, err := repl.NewReplicaOf(args[i+1], int(port), config.Port)
+			if err != nil {
+				fmt.Println("Failed to handshake with master: ", err)
+				os.Exit(1)
+			}
+			config.ReplicaOf = repl
 		}
 	}
-	server, err := lib.New(DefaultConfig)
+	server, err := lib.New(config)
 
 	if err != nil {
 		panic(err)
