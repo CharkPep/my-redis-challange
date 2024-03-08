@@ -78,6 +78,8 @@ func main() {
 	server.RegisterHandler("INFO", server.HandleInfo)
 	server.RegisterHandler("replconf", server.HandleReplConf)
 	server.RegisterHandler("REPLCONF", server.HandleReplConf)
+	server.RegisterHandler("psync", server.HandlePsync)
+	server.RegisterHandler("PSYNC", server.HandlePsync)
 	defer server.Close()
 	server.ListenAndServe()
 }
