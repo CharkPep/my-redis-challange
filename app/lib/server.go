@@ -7,8 +7,7 @@ import (
 	"fmt"
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/repl"
-	"io"
-	"math/rand"
+	"github.com/codecrafters-io/redis-starter-go/app/utils"
 	"net"
 	"time"
 )
@@ -33,7 +32,6 @@ var DefaultConfig = &ServerConfig{
 	ConnectionWriteTimeout: time.Second * 2,
 	ReplicationConfig: &repl.ReplicationConfig{
 		Role:               "master",
-		ConnectedSlaves:    0,
 		MasterReplOffset:   0,
 		SecondReplOffset:   -1,
 		ReplBacklogActive:  0,
@@ -43,21 +41,18 @@ var DefaultConfig = &ServerConfig{
 	},
 }
 
-type Server struct {
-	listener net.Listener
-	close    chan struct{}
-	handlers map[string]func(ctx context.Context, args *resp.Array) (interface{}, error)
-	config   *ServerConfig
-	replOf   *repl.ReplicaOf
-	replicas map[int]*repl.Replica
+type HandleRESP interface {
+	HandleResp(ctx context.Context, args *resp.Array) (interface{}, error)
 }
 
-func randomAlphanumericString(w io.Writer, len int) {
-	source := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for i := 0; i < len; i++ {
-		chars := []byte{uint8(source.Intn(26) + 65), uint8(source.Intn(26) + 97), uint8(source.Intn(10) + 48)}
-		w.Write([]byte{chars[source.Intn(3)]})
-	}
+type Server struct {
+	listener   net.Listener
+	close      chan struct{}
+	handlers   map[string]*HandleRESP
+	replicated map[string]bool
+	config     *ServerConfig
+	replOf     *repl.ReplicaOf
+	replicas   []*repl.Replica
 }
 
 func getCommand(args *[]resp.Marshaller) (string, error) {
@@ -112,29 +107,47 @@ func (s *Server) parser(con net.Conn) {
 			resp.SimpleError{fmt.Sprintf("unknown command: %s", command)}.MarshalRESP(con)
 			return
 		}
-		ctx, cancel := context.WithCancel(context.WithValue(context.Background(), "conn", con))
+		ctxMap := make(map[string]interface{})
+		ctxMap["conn"] = con
+		ctx, cancel := context.WithCancel(context.WithValue(context.Background(), "ctx", ctxMap))
 		defer cancel()
 		args.A = args.A[1:]
-		res, err := handler(ctx, &args)
+		res, err := (*handler).HandleResp(ctx, &args)
 		if err != nil {
 			resp.SimpleError{err.Error()}.MarshalRESP(con)
 		}
+
+		// Escape hatch from returning a bulk nil or nil array
+		if ctxMap["encode"] != nil {
+			if encodeBulkStringNil, ok := ctxMap["encodeBulkStringNil"]; ok && encodeBulkStringNil.(bool) {
+				resp.AnyResp{res, true}.MarshalRESP(con)
+				return
+			}
+
+			return
+		}
+
 		resp.AnyResp{res, false}.MarshalRESP(con)
 	}
 }
 
-func (s *Server) RegisterHandler(command string, handler func(context.Context, *resp.Array) (interface{}, error)) {
-	s.handlers[command] = handler
+func (s *Server) RegisterHandler(command string, handler HandleRESP) {
+	s.handlers[command] = &handler
 }
 
-func New(config *ServerConfig) (*Server, error) {
+func (s *Server) RegisterReplicatedCommand(command string, handler HandleRESP) {
+	s.RegisterHandler(command, handler)
+	s.replicated[command] = true
+}
+
+func New(config *ServerConfig, replicas []*repl.Replica) (*Server, error) {
 	if config == nil {
 		config = DefaultConfig
 	}
 
 	if config.ReplicationConfig != nil {
 		replID := bytes.NewBuffer(make([]byte, 40))
-		randomAlphanumericString(replID, 40)
+		utils.RandomAlphanumericString(replID, 40)
 		config.ReplicationConfig.MasterReplid = string(replID.Bytes())
 	}
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.Host, config.Port))
@@ -142,11 +155,12 @@ func New(config *ServerConfig) (*Server, error) {
 		return nil, err
 	}
 	return &Server{
-		listener: listener,
-		close:    make(chan struct{}),
-		replicas: make(map[int]*repl.Replica),
-		handlers: make(map[string]func(ctx context.Context, args *resp.Array) (interface{}, error)),
-		config:   config,
+		listener:   listener,
+		close:      make(chan struct{}),
+		replicas:   replicas,
+		replicated: make(map[string]bool),
+		handlers:   make(map[string]*HandleRESP),
+		config:     config,
 	}, err
 }
 

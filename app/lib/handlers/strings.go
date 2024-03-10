@@ -10,7 +10,11 @@ import (
 	"time"
 )
 
-type StringHandler struct {
+type StringsSetHandler struct {
+	Storage *storage.StringsStorage
+}
+
+type StringsGetHandler struct {
 	Storage *storage.StringsStorage
 }
 
@@ -151,7 +155,7 @@ func parseSetArgs(args *[]resp.Marshaller) (*SetArgs, error) {
 	return &setArgs, nil
 }
 
-func (sh StringHandler) HandleSet(ctx context.Context, args *resp.Array) (interface{}, error) {
+func (sh StringsSetHandler) HandleResp(ctx context.Context, args *resp.Array) (interface{}, error) {
 	setArgs, err := parseSetArgs(&args.A)
 	if err != nil {
 		return nil, err
@@ -179,7 +183,7 @@ func (sh StringHandler) HandleSet(ctx context.Context, args *resp.Array) (interf
 	return "OK", err
 }
 
-func (sh StringHandler) HandleGet(ctx context.Context, args *resp.Array) (interface{}, error) {
+func (sh StringsGetHandler) HandleResp(ctx context.Context, args *resp.Array) (interface{}, error) {
 	if len(args.A) != 1 {
 		return nil, fmt.Errorf("ERR wrong number of arguments")
 	}

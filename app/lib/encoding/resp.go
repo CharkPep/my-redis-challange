@@ -200,6 +200,14 @@ type Array struct {
 	A []Marshaller
 }
 
+func (a *Array) Append(m Marshaller) {
+	a.A = append(a.A, m)
+}
+
+func (a *Array) AppendArray(arr *Array) {
+	a.A = append(a.A, arr.A...)
+}
+
 func (a Array) MarshalRESP(w io.Writer) error {
 	buff := make([]byte, 0, 64)
 	buff = append(buff, ArrayType...)

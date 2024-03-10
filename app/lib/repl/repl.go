@@ -1,13 +1,33 @@
 package repl
 
+import (
+	"net"
+	"strings"
+)
+
 type Replica struct {
-	host string
-	port int
+	dial net.Conn
 }
 
-func NewReplica(host string, port int) *Replica {
+func (r Replica) GetPort() string {
+	return strings.Split(r.dial.RemoteAddr().String(), ":")[1]
+}
+
+func (r Replica) GetAddress() string {
+	return strings.Split(r.dial.RemoteAddr().String(), ":")[0]
+}
+
+func NewReplica(conn net.Conn) *Replica {
 	return &Replica{
-		host: host,
-		port: port,
+		dial: conn,
 	}
+}
+
+func (repl *Replica) Send(b []byte) (int, error) {
+	n, err := repl.dial.Write(b)
+	if err != nil {
+		return n, err
+	}
+
+	return n, nil
 }

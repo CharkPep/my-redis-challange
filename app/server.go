@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/codecrafters-io/redis-starter-go/app/lib"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/handlers"
+	"github.com/codecrafters-io/redis-starter-go/app/lib/middleware"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/repl"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/storage"
 	"os"
@@ -55,31 +56,38 @@ func main() {
 			config.ReplicaOf = repl
 		}
 	}
-	server, err := lib.New(config)
+	var replicas []*repl.Replica
+	server, err := lib.New(config, replicas)
 
 	if err != nil {
 		panic(err)
 	}
 	// As mentioned, though stupid af, in https://redis.io/commands/command/ the command is case-insensitive
 	// so we register the handler for both "ping" and "PING"
-	server.RegisterHandler("ping", handlers.Ping)
-	server.RegisterHandler("PING", handlers.Ping)
-	server.RegisterHandler("echo", handlers.Echo)
-	server.RegisterHandler("ECHO", handlers.Echo)
+	pingHandler := handlers.PingHandler{}
+	echoHandler := handlers.EchoHandler{}
 	stringsStore := storage.New(nil)
-	stringsHandler := handlers.StringHandler{
-		Storage: stringsStore,
-	}
-	server.RegisterHandler("set", stringsHandler.HandleSet)
-	server.RegisterHandler("SET", stringsHandler.HandleSet)
-	server.RegisterHandler("get", stringsHandler.HandleGet)
-	server.RegisterHandler("GET", stringsHandler.HandleGet)
-	server.RegisterHandler("info", server.HandleInfo)
-	server.RegisterHandler("INFO", server.HandleInfo)
-	server.RegisterHandler("replconf", server.HandleReplConf)
-	server.RegisterHandler("REPLCONF", server.HandleReplConf)
-	server.RegisterHandler("psync", server.HandlePsync)
-	server.RegisterHandler("PSYNC", server.HandlePsync)
+	setHandler := handlers.StringsSetHandler{Storage: stringsStore}
+	setReplMiddleware := middleware.NewReplSet(&setHandler, replicas)
+	getHandler := handlers.StringsGetHandler{Storage: stringsStore}
+	infoHandler := lib.InfoHandler{server}
+	replConfHandler := lib.ReplConfHandler{server}
+	psyncHandler := lib.PsyncHandler{server}
+	server.RegisterHandler("ping", pingHandler)
+	server.RegisterHandler("PING", pingHandler)
+	server.RegisterHandler("echo", echoHandler)
+	server.RegisterHandler("ECHO", echoHandler)
+	server.RegisterReplicatedCommand("set", setReplMiddleware)
+	server.RegisterReplicatedCommand("SET", setReplMiddleware)
+	server.RegisterHandler("get", getHandler)
+	server.RegisterHandler("GET", getHandler)
+	server.RegisterHandler("info", infoHandler)
+	server.RegisterHandler("INFO", infoHandler)
+	server.RegisterHandler("replconf", replConfHandler)
+	server.RegisterHandler("REPLCONF", replConfHandler)
+	server.RegisterHandler("psync", psyncHandler)
+	server.RegisterHandler("PSYNC", psyncHandler)
+
 	defer server.Close()
 	server.ListenAndServe()
 }

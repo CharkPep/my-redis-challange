@@ -6,7 +6,9 @@ import (
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
 )
 
-func Echo(ctx context.Context, args *resp.Array) (interface{}, error) {
+type EchoHandler struct{}
+
+func (EchoHandler) HandleResp(ctx context.Context, args *resp.Array) (interface{}, error) {
 	if len(args.A) < 1 || args == nil {
 		return nil, fmt.Errorf("ERR wrong number of arguments for command")
 	}
