@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
-	"github.com/codecrafters-io/redis-starter-go/app/lib/rdb"
+	"github.com/codecrafters-io/redis-starter-go/app/lib/persistence"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/repl"
+	"log"
 	"net"
+	"time"
 )
 
 type InfoHandler struct {
@@ -49,7 +51,7 @@ func (c ReplConfHandler) HandleResp(ctx context.Context, args *resp.Array) (inte
 			if !ok {
 				return nil, fmt.Errorf("ERR invalid connection type, expected *net.TCPConn, got %T", ctxMap["conn"])
 			}
-			c.S.replicas = append(c.S.replicas, repl.NewReplica(conn))
+			c.S.replicas.AddReplica(repl.NewReplica(conn))
 			return "OK", nil
 		case "capa":
 			return "OK", nil
@@ -63,17 +65,31 @@ type PsyncHandler struct {
 }
 
 func (p PsyncHandler) HandleResp(ctx context.Context, args *resp.Array) (interface{}, error) {
-	ctxMap := ctx.Value("ctx").(map[string]interface{})
-	conn, ok := ctxMap["conn"].(*net.TCPConn)
+	req := ctx.Value("ctx").(map[string]interface{})
+	conn, ok := req["conn"].(*net.TCPConn)
 	if !ok {
 		return nil, fmt.Errorf("ERR invalid connection type, expected *net.TCPConn, got %T", conn)
 	}
 
-	if _, err := conn.Write([]byte(fmt.Sprintf("+FULLRESYNC %s %d\r\n", p.S.config.ReplicationConfig.MasterReplid, p.S.config.ReplicationConfig.MasterReplOffset))); err != nil {
+	resync := fmt.Sprintf("+FULLRESYNC %s %d\r\n", p.S.config.ReplicationConfig.MasterReplid, p.S.config.ReplicationConfig.MasterReplOffset)
+	log.Printf("%v", resync)
+	log.Println(len([]byte(resync)))
+	log.Println(string([]byte(resync)))
+	if n, err := conn.Write([]byte(resync)); err != nil {
+		return nil, err
+	} else {
+		log.Println("Wrote", n, "bytes")
+	}
+	time.Sleep(1 * time.Second)
+	if _, err := conn.Write([]byte(fmt.Sprintf("$%d\r\n%s", len(persistence.GetEmpty()), persistence.GetEmpty()))); err != nil {
 		return nil, err
 	}
 
-	_, err := conn.Write([]byte(fmt.Sprintf("$%d\r\n%s", len(rdb.GetEmpty()), rdb.GetEmpty())))
-	ctxMap["encode"] = false
-	return nil, err
+	p.S.config.ReplicationConfig.ConnectedSlaves += 1
+	log.Println("Replica connected")
+	<-ctx.Done()
+	p.S.config.ReplicationConfig.ConnectedSlaves -= 1
+	log.Printf("Replica disconnected: %s", ctx.Err())
+	req["encode"] = false
+	return nil, nil
 }

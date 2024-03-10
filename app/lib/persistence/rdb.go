@@ -1,4 +1,4 @@
-package rdb
+package persistence
 
 import (
 	"encoding/base64"
