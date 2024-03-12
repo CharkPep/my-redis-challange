@@ -6,6 +6,7 @@ import (
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/persistence"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/repl"
+	"io"
 	"log"
 	"net"
 	"time"
@@ -72,24 +73,42 @@ func (p PsyncHandler) HandleResp(ctx context.Context, args *resp.Array) (interfa
 	}
 
 	resync := fmt.Sprintf("+FULLRESYNC %s %d\r\n", p.S.config.ReplicationConfig.MasterReplid, p.S.config.ReplicationConfig.MasterReplOffset)
-	log.Printf("%v", resync)
-	log.Println(len([]byte(resync)))
-	log.Println(string([]byte(resync)))
-	if n, err := conn.Write([]byte(resync)); err != nil {
+	if _, err := conn.Write([]byte(resync)); err != nil {
 		return nil, err
-	} else {
-		log.Println("Wrote", n, "bytes")
 	}
-	time.Sleep(1 * time.Second)
+
 	if _, err := conn.Write([]byte(fmt.Sprintf("$%d\r\n%s", len(persistence.GetEmpty()), persistence.GetEmpty()))); err != nil {
 		return nil, err
 	}
 
+	if err := conn.SetReadDeadline(time.Time{}); err != nil {
+		log.Printf("Replica read timeout change ended in unexpected error: %s", err)
+		return nil, err
+	}
 	p.S.config.ReplicationConfig.ConnectedSlaves += 1
-	log.Println("Replica connected")
-	<-ctx.Done()
-	p.S.config.ReplicationConfig.ConnectedSlaves -= 1
-	log.Printf("Replica disconnected: %s", ctx.Err())
-	req["encode"] = false
-	return nil, nil
+	log.Printf("Replica %s connected", conn.RemoteAddr())
+	for {
+		select {
+		case <-ctx.Done():
+			p.S.config.ReplicationConfig.ConnectedSlaves -= 1
+			log.Printf("Recieved Done, disconnecting replica %d: %s", conn.RemoteAddr(), ctx.Err())
+			req["encode"] = false
+			return nil, nil
+		default:
+			buf := make([]byte, 1024)
+			log.Println("Listening for propagation")
+			n, err := conn.Read(buf)
+			if err == io.EOF {
+				log.Println("Master disconnected, received EOF")
+				return nil, nil
+			}
+			if err != nil {
+				log.Printf("Unexpected error %s", err)
+				return nil, err
+			}
+			log.Printf("Recieved from master: %s", buf[:n])
+		}
+	}
+	//<-ctx.Done()
+	//return nil, nil
 }

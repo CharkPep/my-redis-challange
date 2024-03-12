@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"strconv"
 )
 
@@ -36,6 +37,7 @@ func (s SimpleString) MarshalRESP(w io.Writer) error {
 	buff = append(buff, []byte(s.S)...)
 	buff = append(buff, TERMINATOR...)
 	_, err := w.Write(buff)
+	log.Printf("Write %s", buff)
 	return err
 }
 
@@ -67,6 +69,10 @@ func (s *SimpleString) UnmarshalRESP(r *bufio.Reader) error {
 		return err
 	}
 	return err
+}
+
+func (s *SimpleString) String() string {
+	return s.S
 }
 
 type SimpleError struct {
@@ -160,6 +166,10 @@ func (b BulkString) MarshalRESP(w io.Writer) error {
 	buff = append(buff, TERMINATOR...)
 	_, err := w.Write(buff)
 	return err
+}
+
+func (b *BulkString) String() string {
+	return string(b.S)
 }
 
 func (b *BulkString) UnmarshalRESP(r *bufio.Reader) error {

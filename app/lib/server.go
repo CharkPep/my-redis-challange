@@ -8,6 +8,7 @@ import (
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/repl"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
+	"io"
 	"log"
 	"net"
 	"time"
@@ -73,21 +74,19 @@ func getCommand(args *[]resp.Marshaller) (string, error) {
 }
 
 func (s *Server) parse(con net.Conn) {
-	defer con.Close()
-	err := con.SetReadDeadline(time.Now().Add(s.config.ConnectionReadTimeout))
-	if err != nil {
-		resp.SimpleError{E: err.Error()}.MarshalRESP(con)
-		log.Printf("error: %s", err.Error())
-		return
-	}
-	err = con.SetWriteDeadline(time.Now().Add(s.config.ConnectionWriteTimeout))
-	if err != nil {
-		resp.SimpleError{E: err.Error()}.MarshalRESP(con)
-		log.Printf("error: %s", err.Error())
-		return
-	}
-	ctx, cancel := context.WithCancel(context.Background())
+	var (
+		args        resp.Array
+		n           int
+		err         error
+		ctx, cancel = context.WithCancel(context.Background())
+		buff        = make([]byte, 1024)
+	)
 	defer cancel()
+	defer con.Close()
+	if err = con.SetReadDeadline(time.Now().Add(time.Second * 10)); err != nil {
+		log.Printf("Error setting read deadline: %s", err)
+		return
+	}
 	for {
 		select {
 		case _, ok := <-s.close:
@@ -95,51 +94,65 @@ func (s *Server) parse(con net.Conn) {
 				return
 			}
 		default:
-			buff := make([]byte, 1024)
-			_, err := con.Read(buff)
+			log.Printf("Reading from connection: %s", con.RemoteAddr())
+			n, err = con.Read(buff)
 			if err != nil {
+				log.Printf("Unexpected error while reading from %s, %s", con.RemoteAddr(), err)
 				resp.SimpleError{E: err.Error()}.MarshalRESP(con)
 				return
 			}
-			reader := bufio.NewReader(bytes.NewReader(buff))
-			var args resp.Array
-			err = args.UnmarshalRESP(reader)
-			if err != nil {
-				resp.SimpleError{E: err.Error()}.MarshalRESP(con)
-				return
-			}
-			command, err := getCommand(&args.A)
-			if err != nil {
-				resp.SimpleError{err.Error()}.MarshalRESP(con)
-			}
-			handler, ok := s.handlers[command]
-			if !ok {
-				resp.SimpleError{fmt.Sprintf("unknown command: %s", command)}.MarshalRESP(con)
-				return
-			}
-			log.Printf("Handling command: %s, from %s ", command, con.RemoteAddr().String())
-			ctx = context.WithValue(ctx, "ctx", map[string]interface{}{"conn": con})
-			args.A = args.A[1:]
-			res, err := (*handler).HandleResp(ctx, &args)
-			if err != nil {
-				resp.SimpleError{err.Error()}.MarshalRESP(con)
-			}
+			log.Printf("Got %q, from %s", buff[:n], con.RemoteAddr())
+			reader := bufio.NewReader(bytes.NewReader(buff[:n]))
+			for {
+				err = args.UnmarshalRESP(reader)
+				if err == io.EOF {
+					break
+				}
+				if err != nil {
+					log.Printf("Unexpected error while unmarshaling resp from %s: %s", con.RemoteAddr(), err)
+					resp.SimpleError{E: err.Error()}.MarshalRESP(con)
+					return
+				}
+				command, err := getCommand(&args.A)
+				if err != nil {
+					log.Printf("Unexpected error getting resp commnand from %s: %s", con.RemoteAddr(), err)
+					resp.SimpleError{err.Error()}.MarshalRESP(con)
+					return
+				}
+				handler, ok := s.handlers[command]
+				if !ok {
+					log.Printf("Unexpected error getting handler from %s", con.RemoteAddr())
+					resp.SimpleError{fmt.Sprintf("unknown command: %s", command)}.MarshalRESP(con)
+					return
+				}
+				log.Printf("Handling command: %s, from %s ", command, con.RemoteAddr().String())
+				log.Printf("Args: %s", args)
+				ctx = context.WithValue(ctx, "ctx", map[string]interface{}{"conn": con})
+				args.A = args.A[1:]
+				res, err := (*handler).HandleResp(ctx, &args)
+				if err != nil {
+					resp.SimpleError{err.Error()}.MarshalRESP(con)
+				}
 
-			req, ok := ctx.Value("ctx").(map[string]interface{})
-			if !ok {
-				resp.SimpleError{E: fmt.Sprintf("invalid context, expected map[string]interface{}, got %T", req)}.MarshalRESP(con)
-			}
-			// Escape hatch from returning a bulk nil or nil array
-			if req["encode"] != nil {
-				if encodeBulkStringNil, ok := req["encodeBulkStringNil"]; ok && encodeBulkStringNil.(bool) {
-					resp.AnyResp{res, true}.MarshalRESP(con)
+				req, ok := ctx.Value("ctx").(map[string]interface{})
+				if !ok {
+					resp.SimpleError{E: fmt.Sprintf("invalid context, expected map[string]interface{}, got %T", req)}.MarshalRESP(con)
+				}
+				// Escape hatch from returning a bulk nil or nil array
+				if req["encode"] != nil {
+					if encodeBulkStringNil, ok := req["encodeBulkStringNil"]; ok && encodeBulkStringNil.(bool) {
+						log.Printf("Reponse with encode nil")
+						resp.AnyResp{res, true}.MarshalRESP(con)
+						return
+					}
+
+					log.Printf("Disconnecting without sending reponse")
 					return
 				}
 
-				return
+				log.Printf("Reponse to %s: %q", con.RemoteAddr(), res)
+				resp.AnyResp{res, false}.MarshalRESP(con)
 			}
-
-			resp.AnyResp{res, false}.MarshalRESP(con)
 		}
 	}
 }
@@ -173,20 +186,12 @@ func New(config *ServerConfig, replicaManger *repl.ReplicaManager) (*Server, err
 
 func (s *Server) ListenAndServe() error {
 	for {
-		select {
-		case _, ok := <-s.close:
-			if !ok {
-				return nil
-			}
-		default:
-			conn, err := s.listener.Accept()
-			if err != nil {
-				return err
-			}
-			go s.parse(conn)
+		conn, err := s.listener.Accept()
+		if err != nil {
+			return err
 		}
+		go s.parse(conn)
 	}
-	panic("unreachable")
 }
 
 func (s *Server) Close() error {

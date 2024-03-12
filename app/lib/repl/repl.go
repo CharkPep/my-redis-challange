@@ -5,10 +5,6 @@ import (
 	"net"
 )
 
-type ReplicaManager struct {
-	replicas []Replica
-}
-
 type Replica struct {
 	conn net.Conn
 
@@ -24,13 +20,4 @@ func NewReplica(conn net.Conn) *Replica {
 	return &Replica{
 		conn: conn,
 	}
-}
-
-func (repl *Replica) Send(b []byte) (int, error) {
-	n, err := repl.conn.Write(b)
-	if err != nil {
-		return n, err
-	}
-
-	return n, nil
 }
