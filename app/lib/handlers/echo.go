@@ -3,15 +3,15 @@ package handlers
 import (
 	"context"
 	"fmt"
-	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
+	"github.com/codecrafters-io/redis-starter-go/app/lib"
 )
 
 type EchoHandler struct{}
 
-func (EchoHandler) HandleResp(ctx context.Context, args *resp.Array) (interface{}, error) {
-	if len(args.A) < 1 || args == nil {
+func (EchoHandler) HandleResp(ctx context.Context, req *lib.RESPRequest) (interface{}, error) {
+	if req.Args == nil || len(req.Args.A) < 1 {
 		return nil, fmt.Errorf("ERR wrong number of arguments for command")
 	}
 
-	return args.A[0], nil
+	return req.Args.A[0], nil
 }

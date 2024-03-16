@@ -5,8 +5,8 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"strconv"
+	"strings"
 )
 
 var (
@@ -32,12 +32,11 @@ type SimpleString struct {
 }
 
 func (s SimpleString) MarshalRESP(w io.Writer) error {
-	buff := make([]byte, 0, 16)
+	buff := make([]byte, 0, 128)
 	buff = append(buff, SimpleStringType...)
 	buff = append(buff, []byte(s.S)...)
 	buff = append(buff, TERMINATOR...)
 	_, err := w.Write(buff)
-	log.Printf("Write %s", buff)
 	return err
 }
 
@@ -47,7 +46,7 @@ func peekAndAssert(r *bufio.Reader, expected []byte) error {
 		return err
 	}
 	if string(peeked) != string(expected) {
-		return fmt.Errorf("i %s, got %s", expected, peeked)
+		return fmt.Errorf("expected %s, got %s", expected, peeked)
 	}
 	return nil
 
@@ -57,17 +56,20 @@ func (s *SimpleString) UnmarshalRESP(r *bufio.Reader) error {
 	if err := peekAndAssert(r, SimpleStringType); err != nil {
 		return err
 	}
-
 	_, err := r.Discard(len(SimpleStringType))
 	str, err := r.ReadSlice(TERMINATOR[0])
 	if err != nil {
 		return err
 	}
-
 	s.S = string(str[:len(str)-1])
 	if _, err = r.Discard(len(TERMINATOR) - 1); err != nil {
 		return err
 	}
+
+	//buff := make([]byte, 1024)
+	//n, _ := r.Read(buff)
+	//fmt.Printf("Left over: %q\n", buff[:n])
+
 	return err
 }
 
@@ -372,4 +374,19 @@ func (a *AnyResp) UnmarshalRESP(r *bufio.Reader) error {
 		return fmt.Errorf("unknown RESP type: %s", peeked)
 	}
 	return nil
+}
+
+// TODO
+func (arr *Array) String() string {
+	str := strings.Builder{}
+	str.WriteString("[")
+	for _, v := range arr.A {
+		if r, ok := v.(fmt.Stringer); ok {
+			str.WriteString(r.String())
+		} else {
+			str.WriteString(fmt.Sprintf("%s", v))
+		}
+	}
+	str.WriteString("]")
+	return str.String()
 }

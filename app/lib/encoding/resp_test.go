@@ -531,3 +531,37 @@ func TestAnyResp_UnmarshalRESPAndMarshalRESP(t *testing.T) {
 
 	}
 }
+
+func TestSimpleString_UnmarshalRESP(t *testing.T) {
+	type ts struct {
+		input    []byte
+		expected SimpleString
+	}
+
+	tests := []ts{
+		{
+			input:    []byte("+hello\r\n"),
+			expected: SimpleString{"hello"},
+		},
+		{
+			input:    []byte("+ hello 0 0\r\nsome other stuff\r\n"),
+			expected: SimpleString{" hello 0 0"},
+		},
+		{
+			input:    []byte("+FULLRESYNC _ 0\r\n$88\r\nREDIS0011\xfa\tredis-ver\x057.2.0\xfa\nredis-bits\xc0@\xfa\x05ctime\xc2m\b\xbce\xfa\bused-mem°\xc4\x10\x00\xfa\baof-base\xc0\x00\xff\xf0n;\xfe\xc0\xffZ\xa2"),
+			expected: SimpleString{"FULLRESYNC _ 0"},
+		},
+	}
+
+	for _, test := range tests {
+		var s SimpleString
+		r := bufio.NewReader(bytes.NewReader(test.input))
+		err := s.UnmarshalRESP(r)
+		if err != nil {
+			t.Errorf("unexpected error: %s", err)
+		}
+		if s != test.expected {
+			t.Errorf("expected %v, got %v", test.expected, s)
+		}
+	}
+}

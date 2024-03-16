@@ -5,11 +5,12 @@ import (
 	"testing"
 )
 
-func TestServer_getCommand(t *testing.T) {
+func TestRequest_GetCommand(t *testing.T) {
 	type testCases struct {
 		input    []resp.Marshaller
 		expected string
 	}
+	r := NewRouter()
 	tests := []testCases{
 		{
 			input:    []resp.Marshaller{resp.SimpleString{"hello"}},
@@ -21,7 +22,7 @@ func TestServer_getCommand(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		result, _ := getCommand(&test.input)
+		result, _ := r.getCommand(&test.input)
 		if result != test.expected {
 			t.Fatalf("expected %v, got %q", test.expected, result)
 		}

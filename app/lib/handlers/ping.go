@@ -2,11 +2,11 @@ package handlers
 
 import (
 	"context"
-	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
+	"github.com/codecrafters-io/redis-starter-go/app/lib"
 )
 
 type PingHandler struct{}
 
-func (PingHandler) HandleResp(ctx context.Context, args *resp.Array) (interface{}, error) {
+func (PingHandler) HandleResp(ctx context.Context, req *lib.RESPRequest) (interface{}, error) {
 	return "PONG", nil
 }

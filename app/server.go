@@ -5,7 +5,6 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/lib"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/handlers"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/middleware"
-	"github.com/codecrafters-io/redis-starter-go/app/lib/repl"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/storage"
 	"log"
 	"os"
@@ -19,32 +18,32 @@ Usage: <build> [options]
 --replicaof <host> <port>	Make the server a slave of another instance
 `
 
-func RegisterHandlers(server *lib.Server, replicas *repl.ReplicaManager) {
-	// As mentioned, though stupid af, in https://redis.io/commands/command/ the command is case-insensitive
+func RegisterHandlers(router *lib.Router) {
+	//  As mentioned, though stupid af, in https://redis.io/commands/command/ the command is case-insensitive
 	// so we register the handler for both "ping" and "PING"
 	pingHandler := handlers.PingHandler{}
 	echoHandler := handlers.EchoHandler{}
 	stringsStore := storage.New(nil)
 	setHandler := handlers.StringsSetHandler{Storage: stringsStore}
-	replicatedSet := middleware.NewReplicationWrapper(&setHandler, replicas)
+	replicatedSet := middleware.NewReplicationWrapper(&setHandler)
 	getHandler := handlers.StringsGetHandler{Storage: stringsStore}
-	infoHandler := lib.InfoHandler{server}
-	replConfHandler := lib.ReplConfHandler{server}
-	psyncHandler := lib.PsyncHandler{server}
-	server.RegisterHandler("ping", pingHandler)
-	server.RegisterHandler("PING", pingHandler)
-	server.RegisterHandler("echo", echoHandler)
-	server.RegisterHandler("ECHO", echoHandler)
-	server.RegisterHandler("set", replicatedSet)
-	server.RegisterHandler("SET", replicatedSet)
-	server.RegisterHandler("get", getHandler)
-	server.RegisterHandler("GET", getHandler)
-	server.RegisterHandler("info", infoHandler)
-	server.RegisterHandler("INFO", infoHandler)
-	server.RegisterHandler("replconf", replConfHandler)
-	server.RegisterHandler("REPLCONF", replConfHandler)
-	server.RegisterHandler("psync", psyncHandler)
-	server.RegisterHandler("PSYNC", psyncHandler)
+	infoHandler := lib.InfoHandler{}
+	replConfHandler := lib.ReplConfHandler{}
+	psyncHandler := lib.PsyncHandler{}
+	router.RegisterHandler("ping", pingHandler)
+	router.RegisterHandler("PING", pingHandler)
+	router.RegisterHandler("echo", echoHandler)
+	router.RegisterHandler("ECHO", echoHandler)
+	router.RegisterHandler("set", replicatedSet)
+	router.RegisterHandler("SET", replicatedSet)
+	router.RegisterHandler("get", getHandler)
+	router.RegisterHandler("GET", getHandler)
+	router.RegisterHandler("info", infoHandler)
+	router.RegisterHandler("INFO", infoHandler)
+	router.RegisterHandler("replconf", replConfHandler)
+	router.RegisterHandler("REPLCONF", replConfHandler)
+	router.RegisterHandler("psync", psyncHandler)
+	router.RegisterHandler("PSYNC", psyncHandler)
 }
 
 func main() {
@@ -71,24 +70,31 @@ func main() {
 			if i+2 >= len(args) {
 				log.Fatal("Invalid replicaof")
 			}
-			config.ReplicationConfig.Role = "slave"
 			port, err := strconv.ParseInt(args[i+2], 10, 64)
 			if err != nil {
 				log.Fatal("Invalid port")
 			}
-			repl, err := repl.NewReplicaOf(args[i+1], int(port), config.Port)
 			if err != nil {
 				log.Fatal("Failed to handshake with master: ", err)
 			}
-			config.ReplicaOf = repl
+			config.ReplicaOf = args[i+1] + ":" + strconv.Itoa(int(port))
 		}
 	}
-	replicas := repl.NewReplicaManager()
-	server, err := lib.New(config, replicas)
+	router := lib.NewRouter()
+	RegisterHandlers(router)
+	server, err := lib.New(config, router)
 	if err != nil {
 		panic(err)
 	}
-	RegisterHandlers(server, replicas)
 	defer server.Close()
-	server.ListenAndServe()
+	done := make(chan struct{})
+	go func() {
+		server.ConnectMaster()
+		if err = server.ListenAndServe(); err != nil {
+			fmt.Printf("Error while listening for port %d: %s", config.Port, err)
+		}
+		done <- struct{}{}
+	}()
+	<-done
+
 }

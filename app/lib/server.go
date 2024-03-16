@@ -1,17 +1,22 @@
 package lib
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"fmt"
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/repl"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
-	"io"
 	"log"
 	"net"
+	"os"
 	"time"
+)
+
+var (
+	READ_TIMEOUT = 10 * time.Second
+
+	PROPAGATION_CONSUMERS = 10
 )
 
 type ServerConfig struct {
@@ -19,8 +24,8 @@ type ServerConfig struct {
 	Port                   int
 	ConnectionReadTimeout  time.Duration
 	ConnectionWriteTimeout time.Duration
+	ReplicaOf              string
 	ReplicationConfig      *repl.ReplicationConfig
-	ReplicaOf              *repl.ReplicaOf
 }
 
 func GetDefaultConfig() *ServerConfig {
@@ -45,143 +50,72 @@ var DefaultConfig = &ServerConfig{
 }
 
 type HandleRESP interface {
-	HandleResp(ctx context.Context, args *resp.Array) (interface{}, error)
+	HandleResp(ctx context.Context, req *RESPRequest) (interface{}, error)
 }
 
 type Server struct {
-	logger   *log.Logger
-	listener net.Listener
-	close    chan struct{}
-	handlers map[string]*HandleRESP
-	config   *ServerConfig
-	replOf   *repl.ReplicaOf
-	replicas *repl.ReplicaManager
+	logger      *log.Logger
+	listener    net.Listener
+	close       chan struct{}
+	config      *ServerConfig
+	router      *Router
+	propagation chan *resp.Array
+	replicaOf   *repl.ReplicaOf
+	replicas    []*repl.Replica
 }
 
-func getCommand(args *[]resp.Marshaller) (string, error) {
-	if len(*args) == 0 {
-		return "", fmt.Errorf("empty command")
-	}
-
-	switch command := (*args)[0].(type) {
-	case resp.SimpleString:
-		return command.S, nil
-	case resp.BulkString:
-		return string(command.S), nil
-	}
-
-	return "", fmt.Errorf("invalid command type: %T", (*args)[0])
-}
-
-func (s *Server) parse(con net.Conn) {
-	var (
-		args        resp.Array
-		n           int
-		err         error
-		ctx, cancel = context.WithCancel(context.Background())
-		buff        = make([]byte, 1024)
-	)
-	defer cancel()
-	defer con.Close()
-	if err = con.SetReadDeadline(time.Now().Add(time.Second * 10)); err != nil {
-		log.Printf("Error setting read deadline: %s", err)
-		return
-	}
-	for {
-		select {
-		case _, ok := <-s.close:
-			if !ok {
-				return
-			}
-		default:
-			log.Printf("Reading from connection: %s", con.RemoteAddr())
-			n, err = con.Read(buff)
-			if err != nil {
-				log.Printf("Unexpected error while reading from %s, %s", con.RemoteAddr(), err)
-				resp.SimpleError{E: err.Error()}.MarshalRESP(con)
-				return
-			}
-			log.Printf("Got %q, from %s", buff[:n], con.RemoteAddr())
-			reader := bufio.NewReader(bytes.NewReader(buff[:n]))
-			for {
-				err = args.UnmarshalRESP(reader)
-				if err == io.EOF {
-					break
-				}
-				if err != nil {
-					log.Printf("Unexpected error while unmarshaling resp from %s: %s", con.RemoteAddr(), err)
-					resp.SimpleError{E: err.Error()}.MarshalRESP(con)
-					return
-				}
-				command, err := getCommand(&args.A)
-				if err != nil {
-					log.Printf("Unexpected error getting resp commnand from %s: %s", con.RemoteAddr(), err)
-					resp.SimpleError{err.Error()}.MarshalRESP(con)
-					return
-				}
-				handler, ok := s.handlers[command]
-				if !ok {
-					log.Printf("Unexpected error getting handler from %s", con.RemoteAddr())
-					resp.SimpleError{fmt.Sprintf("unknown command: %s", command)}.MarshalRESP(con)
-					return
-				}
-				log.Printf("Handling command: %s, from %s ", command, con.RemoteAddr().String())
-				log.Printf("Args: %s", args)
-				ctx = context.WithValue(ctx, "ctx", map[string]interface{}{"conn": con})
-				args.A = args.A[1:]
-				res, err := (*handler).HandleResp(ctx, &args)
-				if err != nil {
-					resp.SimpleError{err.Error()}.MarshalRESP(con)
-				}
-
-				req, ok := ctx.Value("ctx").(map[string]interface{})
-				if !ok {
-					resp.SimpleError{E: fmt.Sprintf("invalid context, expected map[string]interface{}, got %T", req)}.MarshalRESP(con)
-				}
-				// Escape hatch from returning a bulk nil or nil array
-				if req["encode"] != nil {
-					if encodeBulkStringNil, ok := req["encodeBulkStringNil"]; ok && encodeBulkStringNil.(bool) {
-						log.Printf("Reponse with encode nil")
-						resp.AnyResp{res, true}.MarshalRESP(con)
-						return
-					}
-
-					log.Printf("Disconnecting without sending reponse")
-					return
-				}
-
-				log.Printf("Reponse to %s: %q", con.RemoteAddr(), res)
-				resp.AnyResp{res, false}.MarshalRESP(con)
-			}
+func (s *Server) PropagateToAll(buff []byte) {
+	s.logger.Printf("Propagating to all replicas, %d", len(s.replicas))
+	for _, r := range s.replicas {
+		if _, err := r.Propagate(buff); err != nil {
+			//TODO resync replica
+			s.logger.Printf("Error writing to replica: %s", err)
 		}
 	}
 }
 
-func (s *Server) RegisterHandler(command string, handler HandleRESP) {
-	s.handlers[command] = &handler
-}
-
-func New(config *ServerConfig, replicaManger *repl.ReplicaManager) (*Server, error) {
+func New(config *ServerConfig, router *Router) (*Server, error) {
 	if config == nil {
 		config = DefaultConfig
 	}
-
-	if config.ReplicationConfig != nil {
-		replID := bytes.NewBuffer(make([]byte, 0, 40))
-		utils.RandomAlphanumericString(replID, 40)
-		config.ReplicationConfig.MasterReplid = string(replID.Bytes())
+	logger := log.New(os.Stdout, fmt.Sprintf("master %d: ", config.Port), log.Lmicroseconds|log.Lshortfile)
+	var propagation chan *resp.Array = nil
+	if config.ReplicaOf != "" {
+		logger.SetPrefix("replica")
+		propagation = make(chan *resp.Array, 100)
 	}
+
+	replID := bytes.NewBuffer(make([]byte, 0, 40))
+	utils.RandomAlphanumericString(replID, 40)
+	config.ReplicationConfig.MasterReplid = string(replID.Bytes())
+
 	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", config.Host, config.Port))
 	if err != nil {
 		return nil, err
 	}
 	return &Server{
-		listener: listener,
-		close:    make(chan struct{}),
-		replicas: replicaManger,
-		handlers: make(map[string]*HandleRESP),
-		config:   config,
+		logger:      logger,
+		listener:    listener,
+		router:      router,
+		close:       make(chan struct{}),
+		replicas:    make([]*repl.Replica, 0, 4),
+		config:      config,
+		propagation: propagation,
 	}, err
+}
+
+func (s *Server) ConnectMaster() error {
+	if s.config.ReplicaOf != "" {
+		s.config.ReplicationConfig.Role = "slave"
+		master, err := repl.NewReplicaOf(s.config.ReplicaOf, fmt.Sprint(s.config.Port), s.propagation)
+		if err != nil {
+			s.logger.Printf("Failed to connect to master %v: %s", s.config.ReplicaOf, err)
+			return err
+		}
+		s.replicaOf = master
+		go s.initPropagationConsumptionFromMaster()
+	}
+	return nil
 }
 
 func (s *Server) ListenAndServe() error {
@@ -190,12 +124,54 @@ func (s *Server) ListenAndServe() error {
 		if err != nil {
 			return err
 		}
-		go s.parse(conn)
+		go func(conn net.Conn) {
+			if err = conn.SetDeadline(time.Now().Add(time.Second * 10)); err != nil {
+				s.logger.Printf("Error setting read deadline: %s", err)
+				return
+			}
+			defer conn.Close()
+			s.logger.Printf("Accepted connection from %s", conn.RemoteAddr())
+			NewRequest(conn, s).Handle()
+		}(conn)
+	}
+}
+
+func (s *Server) initPropagationConsumptionFromMaster() {
+	for i := 0; i < PROPAGATION_CONSUMERS; i++ {
+		go func(i int) {
+			for {
+				select {
+				case _, ok := <-s.close:
+					if !ok {
+						s.logger.Printf("Closing consumer %d", i)
+						return
+					}
+				case args := <-s.propagation:
+					s.logger.Printf("Propagating %q in consumer %d", args, i)
+					handler, err := s.router.ResolveRequest(args)
+					if err != nil {
+						s.logger.Printf("Error resolving request: %s", err)
+						continue
+					}
+
+					args.A = args.A[1:]
+					res, err := handler.HandleResp(context.Background(), &RESPRequest{
+						Args:   args,
+						Logger: s.logger,
+						S:      s,
+					})
+					if err != nil {
+						s.logger.Printf("ERROR: propagating to replica: %s", err)
+					}
+					log.Printf("Propagated %s to replica: %v", args, res)
+				}
+			}
+		}(i)
 	}
 }
 
 func (s *Server) Close() error {
-	log.Println("Closing server")
+	s.logger.Println("Closing server")
 	close(s.close)
 	return s.listener.Close()
 }

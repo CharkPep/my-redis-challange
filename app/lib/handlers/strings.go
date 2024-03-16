@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/codecrafters-io/redis-starter-go/app/lib"
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/storage"
 	"strconv"
@@ -155,8 +156,8 @@ func parseSetArgs(args *[]resp.Marshaller) (*SetArgs, error) {
 	return &setArgs, nil
 }
 
-func (sh StringsSetHandler) HandleResp(ctx context.Context, args *resp.Array) (interface{}, error) {
-	setArgs, err := parseSetArgs(&args.A)
+func (sh StringsSetHandler) HandleResp(ctx context.Context, req *lib.RESPRequest) (interface{}, error) {
+	setArgs, err := parseSetArgs(&req.Args.A)
 	if err != nil {
 		return nil, err
 	}
@@ -183,17 +184,17 @@ func (sh StringsSetHandler) HandleResp(ctx context.Context, args *resp.Array) (i
 	return "OK", err
 }
 
-func (sh StringsGetHandler) HandleResp(ctx context.Context, args *resp.Array) (interface{}, error) {
-	if len(args.A) != 1 {
+func (sh StringsGetHandler) HandleResp(ctx context.Context, req *lib.RESPRequest) (interface{}, error) {
+	if len(req.Args.A) != 1 {
 		return nil, fmt.Errorf("ERR wrong number of arguments")
 	}
-	key, ok := args.A[0].(resp.BulkString)
+	key, ok := req.Args.A[0].(resp.BulkString)
 	if !ok {
-		return nil, fmt.Errorf("ERR invalid key type, expected string, got %T", args.A[0])
+		return nil, fmt.Errorf("ERR invalid key type, expected string, got %T", req.Args.A[0])
 	}
 	value, ok := sh.Storage.Get(string(key.S))
 	if !ok {
 		return resp.BulkString{S: nil, EncodeNil: true}, nil
 	}
-	return value, nil
+	return []byte(value), nil
 }
