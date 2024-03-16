@@ -14,7 +14,12 @@ type ReplicaOf struct {
 	logger      *log.Logger
 	r           *bufio.Reader
 	conn        net.Conn
-	propagation chan<- *resp.Array
+	propagation chan<- *REPLRequest
+}
+
+type REPLRequest struct {
+	Conn net.Conn
+	Args *resp.Array
 }
 
 func (r *ReplicaOf) GetAddr() net.Addr {
@@ -22,7 +27,7 @@ func (r *ReplicaOf) GetAddr() net.Addr {
 }
 
 // NewReplicaOf create replica of host by making a handshake sending listening port - port
-func NewReplicaOf(host, port string, propagation chan<- *resp.Array) (*ReplicaOf, error) {
+func NewReplicaOf(host, port string, propagation chan<- *REPLRequest) (*ReplicaOf, error) {
 	conn, err := net.DialTimeout("tcp", host, time.Second*10)
 	if err != nil {
 		return nil, err
@@ -146,6 +151,9 @@ func (r *ReplicaOf) ListenAndAccept() error {
 		}
 
 		r.logger.Printf("Got propagation: %s", args)
-		r.propagation <- &args
+		r.propagation <- &REPLRequest{
+			Conn: r.conn,
+			Args: &args,
+		}
 	}
 }

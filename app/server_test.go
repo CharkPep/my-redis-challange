@@ -325,7 +325,6 @@ func TestPropagation(t *testing.T) {
 	for _, c := range commands {
 		client.Write([]byte(fmt.Sprintf("*3\r\n$3\r\nSET\r\n$3\r\n%s\r\n$3\r\n%s\r\n", c.key, c.val)))
 	}
-	client.Close()
 	t.Log("Checking replica")
 	client, err = net.DialTimeout("tcp", ":6380", time.Second*5)
 	if err != nil {
@@ -345,3 +344,9 @@ func TestPropagation(t *testing.T) {
 	teardownReplica(t)
 	teardownMaster(t)
 }
+
+//func TestRegisterHandlers(t *testing.T) {
+//	teardownMaster := SetupMaster(t)
+//	teardownReplica, _ := SetupReplicaOf(t, fmt.Sprintf(":%d", PORT), 6380)
+//
+//}

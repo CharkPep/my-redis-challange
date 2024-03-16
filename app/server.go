@@ -30,6 +30,7 @@ func RegisterHandlers(router *lib.Router) {
 	infoHandler := lib.InfoHandler{}
 	replConfHandler := lib.ReplConfHandler{}
 	psyncHandler := lib.PsyncHandler{}
+	//pconfHanlder := handlers.Replconf{}
 	router.RegisterHandler("ping", pingHandler)
 	router.RegisterHandler("PING", pingHandler)
 	router.RegisterHandler("echo", echoHandler)

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/repl"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 	"log"
@@ -59,7 +58,7 @@ type Server struct {
 	close       chan struct{}
 	config      *ServerConfig
 	router      *Router
-	propagation chan *resp.Array
+	propagation chan *repl.REPLRequest
 	replicaOf   *repl.ReplicaOf
 	replicas    []*repl.Replica
 }
@@ -79,10 +78,10 @@ func New(config *ServerConfig, router *Router) (*Server, error) {
 		config = DefaultConfig
 	}
 	logger := log.New(os.Stdout, fmt.Sprintf("master %d: ", config.Port), log.Lmicroseconds|log.Lshortfile)
-	var propagation chan *resp.Array = nil
+	var propagation chan *repl.REPLRequest = nil
 	if config.ReplicaOf != "" {
 		logger.SetPrefix("replica")
-		propagation = make(chan *resp.Array, 100)
+		propagation = make(chan *repl.REPLRequest, 100)
 	}
 
 	replID := bytes.NewBuffer(make([]byte, 0, 40))
@@ -146,24 +145,25 @@ func (s *Server) initPropagationConsumptionFromMaster() {
 						s.logger.Printf("Closing consumer %d", i)
 						return
 					}
-				case args := <-s.propagation:
-					s.logger.Printf("Propagating %q in consumer %d", args, i)
-					handler, err := s.router.ResolveRequest(args)
+				case req := <-s.propagation:
+					s.logger.Printf("Propagating %q in consumer %d", req.Args, i)
+					handler, err := s.router.ResolveRequest(req.Args)
 					if err != nil {
 						s.logger.Printf("Error resolving request: %s", err)
 						continue
 					}
 
-					args.A = args.A[1:]
+					req.Args.A = req.Args.A[1:]
 					res, err := handler.HandleResp(context.Background(), &RESPRequest{
-						Args:   args,
-						Logger: s.logger,
 						S:      s,
+						Args:   req.Args,
+						Conn:   req.Conn,
+						Logger: s.logger,
 					})
 					if err != nil {
 						s.logger.Printf("ERROR: propagating to replica: %s", err)
 					}
-					log.Printf("Propagated %s to replica: %v", args, res)
+					log.Printf("Propagated %s to replica: %v", req.Args, res)
 				}
 			}
 		}(i)

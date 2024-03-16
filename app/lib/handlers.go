@@ -34,15 +34,18 @@ func (c ReplConfHandler) HandleResp(ctx context.Context, req *RESPRequest) (inte
 	switch v := req.Args.A[0].(type) {
 	case resp.BulkString:
 		switch string(v.S) {
-		case "listening-port":
+		case "listening-port", "LISTENING-PORT":
 			if len(req.Args.A) < 2 {
 				return nil, fmt.Errorf("ERR wrong number of arguments for command")
 			}
 			log.Printf("Adding replica on port %s", req.Args.A[1].(resp.BulkString).S)
 			req.S.replicas = append(req.S.replicas, repl.NewReplica(req.Conn))
 			return "OK", nil
-		case "capa":
+		case "capa", "CAPA":
 			return "OK", nil
+		case "getack", "GETACK":
+			(resp.Array{A: []resp.Marshaller{resp.BulkString{S: []byte("REPLCONF")}, resp.BulkString{S: []byte("ACK")}, resp.BulkString{S: []byte("0")}}}).MarshalRESP(req.Conn)
+			return nil, nil
 		}
 	}
 	return nil, fmt.Errorf("ERR invalid command")
