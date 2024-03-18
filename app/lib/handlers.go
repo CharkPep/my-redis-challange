@@ -1,5 +1,7 @@
 package lib
 
+// handlers.go includes server level handlers
+
 import (
 	"context"
 	"fmt"
@@ -76,4 +78,10 @@ func (p PsyncHandler) HandleResp(ctx context.Context, req *RESPRequest) (interfa
 	<-ctx.Done()
 	req.s.config.ReplicationConfig.ConnectedSlaves += -1
 	return nil, nil
+}
+
+type WaitHandler struct{}
+
+func (w WaitHandler) HandleResp(ctx context.Context, req *RESPRequest) (interface{}, error) {
+	return 0, nil
 }

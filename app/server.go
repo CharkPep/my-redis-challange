@@ -29,6 +29,7 @@ func RegisterHandlers(router *lib.Router) {
 	infoHandler := lib.InfoHandler{}
 	replConfHandler := lib.ReplConfHandler{}
 	psyncHandler := lib.PsyncHandler{}
+	waitHander := lib.WaitHandler{}
 	//pconfHanlder := handlers.Replconf{}
 	router.RegisterHandler("ping", pingHandler)
 	router.RegisterHandler("PING", pingHandler)
@@ -44,6 +45,8 @@ func RegisterHandlers(router *lib.Router) {
 	router.RegisterHandler("REPLCONF", replConfHandler)
 	router.RegisterHandler("psync", psyncHandler)
 	router.RegisterHandler("PSYNC", psyncHandler)
+	router.RegisterHandler("wait", waitHander)
+	router.RegisterHandler("WAIT", waitHander)
 }
 func main() {
 	log.SetPrefix("redis-server:")
