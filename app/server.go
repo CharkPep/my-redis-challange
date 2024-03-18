@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/codecrafters-io/redis-starter-go/app/lib"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/handlers"
-	"github.com/codecrafters-io/redis-starter-go/app/lib/middleware"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/storage"
 	"log"
 	"os"
@@ -25,7 +24,7 @@ func RegisterHandlers(router *lib.Router) {
 	echoHandler := handlers.EchoHandler{}
 	stringsStore := storage.New(nil)
 	setHandler := handlers.StringsSetHandler{Storage: stringsStore}
-	replicatedSet := middleware.NewReplicationWrapper(&setHandler)
+	replicatedSet := lib.NewReplicationWrapper(&setHandler)
 	getHandler := handlers.StringsGetHandler{Storage: stringsStore}
 	infoHandler := lib.InfoHandler{}
 	replConfHandler := lib.ReplConfHandler{}
@@ -46,7 +45,6 @@ func RegisterHandlers(router *lib.Router) {
 	router.RegisterHandler("psync", psyncHandler)
 	router.RegisterHandler("PSYNC", psyncHandler)
 }
-
 func main() {
 	log.SetPrefix("redis-server:")
 	log.SetFlags(log.Lshortfile | log.Lmicroseconds)

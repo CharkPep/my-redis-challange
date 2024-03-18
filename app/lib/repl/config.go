@@ -4,21 +4,22 @@ import (
 	"fmt"
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
 	"io"
+	"sync/atomic"
 )
 
 type ReplicationConfig struct {
 	Role               string
 	ConnectedSlaves    int
 	MasterReplid       string
-	MasterReplOffset   int
-	SecondReplOffset   int
+	MasterReplOffset   atomic.Uint64
+	SecondReplOffset   atomic.Uint64
 	ReplBacklogActive  int
 	ReplBacklogSize    int
 	ReplBacklogFirst   int
 	ReplBacklogHistlen int
 }
 
-func (r *ReplicationConfig) MarshalRESP(w io.Writer) error {
+func (r *ReplicationConfig) MarshalRESP(w io.Writer) (int, error) {
 	const format = `role:%s
 					connected_slaves:%d
 					master_replid:%s
@@ -32,7 +33,7 @@ func (r *ReplicationConfig) MarshalRESP(w io.Writer) error {
 		r.Role,
 		r.ConnectedSlaves,
 		r.MasterReplid,
-		r.MasterReplOffset,
+		r.MasterReplOffset.Load(),
 		-1,
 		r.ReplBacklogActive,
 		r.ReplBacklogSize,

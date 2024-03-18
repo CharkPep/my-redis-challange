@@ -1,21 +1,20 @@
-package middleware
+package lib
 
 import (
 	"bytes"
 	"context"
-	"github.com/codecrafters-io/redis-starter-go/app/lib"
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
 )
 
 type ReplWrapper struct {
-	next lib.HandleRESP
+	next HandleRESP
 }
 
-func NewReplicationWrapper(next lib.HandleRESP) *ReplWrapper {
+func NewReplicationWrapper(next HandleRESP) *ReplWrapper {
 	return &ReplWrapper{next: next}
 }
 
-func (h ReplWrapper) HandleResp(ctx context.Context, req *lib.RESPRequest) (interface{}, error) {
+func (h ReplWrapper) HandleResp(ctx context.Context, req *RESPRequest) (interface{}, error) {
 	// Need to check if write was successful before propagating
 	res, err := h.next.HandleResp(ctx, req)
 	if err != nil {
@@ -25,6 +24,6 @@ func (h ReplWrapper) HandleResp(ctx context.Context, req *lib.RESPRequest) (inte
 	arr := resp.Array{A: []resp.Marshaller{resp.BulkString{S: []byte("SET")}}}
 	arr.AppendArray(req.Args)
 	arr.MarshalRESP(buff)
-	req.S.PropagateToAll(buff.Bytes())
+	req.s.PropagateToAll(buff.Bytes())
 	return res, nil
 }

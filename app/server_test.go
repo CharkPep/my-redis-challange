@@ -130,7 +130,7 @@ func TestServerShouldReturnEcho(t *testing.T) {
 					ts.Errorf("unexpected error: %s", err)
 				}
 				buff := bytes.NewBuffer([]byte{})
-				err = test.args.MarshalRESP(buff)
+				_, err = test.args.MarshalRESP(buff)
 				if err != nil {
 					ts.Errorf("unexpected error: %s", err)
 				}
@@ -164,7 +164,7 @@ func TestShouldReturnOK(t *testing.T) {
 
 	for i := 0; i < n; i++ {
 		res := resp.SimpleString{}
-		if err := res.UnmarshalRESP(bufio.NewReader(client)); err != nil {
+		if _, err := res.UnmarshalRESP(bufio.NewReader(client)); err != nil {
 			t.Errorf("unexpected error: %s", err)
 		}
 	}
@@ -291,7 +291,7 @@ func TestReadIoTimeout(t *testing.T) {
 	}
 	error := resp.SimpleError{}
 	reader := bufio.NewReader(bytes.NewBuffer(buff[:n]))
-	if err = error.UnmarshalRESP(reader); err != nil {
+	if _, err = error.UnmarshalRESP(reader); err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}
 	teardown(t)
@@ -330,6 +330,7 @@ func TestPropagation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
+	time.Sleep(100 * time.Millisecond)
 	for _, c := range commands {
 		n, err = client.Write([]byte(fmt.Sprintf("*2\r\n$3\r\nget\r\n$3\r\n%s\r\n", c.key)))
 		if err != nil {

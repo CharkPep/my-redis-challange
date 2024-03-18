@@ -20,24 +20,11 @@ var (
 )
 
 type Marshaller interface {
-	MarshalRESP(w io.Writer) error
+	MarshalRESP(w io.Writer) (int, error)
 }
 
 type Unmarshaler interface {
-	UnmarshalRESP(r *bufio.Reader) error
-}
-
-type SimpleString struct {
-	S string
-}
-
-func (s SimpleString) MarshalRESP(w io.Writer) error {
-	buff := make([]byte, 0, 128)
-	buff = append(buff, SimpleStringType...)
-	buff = append(buff, []byte(s.S)...)
-	buff = append(buff, TERMINATOR...)
-	_, err := w.Write(buff)
-	return err
+	UnmarshalRESP(r *bufio.Reader) (int, error)
 }
 
 func peekAndAssert(r *bufio.Reader, expected []byte) error {
@@ -52,25 +39,36 @@ func peekAndAssert(r *bufio.Reader, expected []byte) error {
 
 }
 
-func (s *SimpleString) UnmarshalRESP(r *bufio.Reader) error {
-	if err := peekAndAssert(r, SimpleStringType); err != nil {
-		return err
+type SimpleString struct {
+	S string
+}
+
+func (s SimpleString) MarshalRESP(w io.Writer) (int, error) {
+	buff := make([]byte, 0, 64)
+	buff = append(buff, SimpleStringType...)
+	buff = append(buff, []byte(s.S)...)
+	buff = append(buff, TERMINATOR...)
+	return w.Write(buff)
+}
+func (s *SimpleString) UnmarshalRESP(r *bufio.Reader) (n int, err error) {
+	if err = peekAndAssert(r, SimpleStringType); err != nil {
+		return
 	}
-	_, err := r.Discard(len(SimpleStringType))
+	n, err = r.Discard(len(SimpleStringType))
+	if err != nil {
+		return n, err
+	}
 	str, err := r.ReadSlice(TERMINATOR[0])
 	if err != nil {
-		return err
+		return
 	}
+	n += len(str)
 	s.S = string(str[:len(str)-1])
 	if _, err = r.Discard(len(TERMINATOR) - 1); err != nil {
-		return err
+		return
 	}
-
-	//buff := make([]byte, 1024)
-	//n, _ := r.Read(buff)
-	//fmt.Printf("Left over: %q\n", buff[:n])
-
-	return err
+	n += len(TERMINATOR) - 1
+	return
 }
 
 func (s *SimpleString) String() string {
@@ -81,28 +79,31 @@ type SimpleError struct {
 	E string
 }
 
-func (e SimpleError) MarshalRESP(w io.Writer) error {
+func (e SimpleError) MarshalRESP(w io.Writer) (int, error) {
 	buff := make([]byte, 0, 16)
 	buff = append(buff, SimpleErrorType...)
 	buff = append(buff, []byte(e.E)...)
 	buff = append(buff, TERMINATOR...)
-	_, err := w.Write(buff)
-	return err
+	return w.Write(buff)
 }
 
-func (e *SimpleError) UnmarshalRESP(r *bufio.Reader) error {
-	if err := peekAndAssert(r, SimpleErrorType); err != nil {
-		return err
+func (e *SimpleError) UnmarshalRESP(r *bufio.Reader) (n int, err error) {
+	if err = peekAndAssert(r, SimpleErrorType); err != nil {
+		return
 	}
 
-	_, err := r.Discard(len(SimpleErrorType))
+	n, err = r.Discard(len(SimpleErrorType))
 	str, err := r.ReadSlice(TERMINATOR[0])
 	if err != nil {
-		return err
+		return
 	}
-
+	n += len(str)
 	e.E = string(str[:len(str)-1])
-	return err
+	if _, err = r.Discard(len(TERMINATOR) - 1); err != nil {
+		return
+	}
+	n += len(TERMINATOR) - 1
+	return
 }
 
 func (e SimpleError) Error() string {
@@ -113,34 +114,36 @@ type SimpleInt struct {
 	I int64
 }
 
-func (i SimpleInt) MarshalRESP(w io.Writer) error {
+func (i SimpleInt) MarshalRESP(w io.Writer) (int, error) {
 	buff := make([]byte, 0, 16)
 	buff = append(buff, SimpleIntType...)
 	buff = strconv.AppendInt(buff, i.I, 10)
 	buff = append(buff, TERMINATOR...)
-	_, err := w.Write(buff)
-	return err
+	return w.Write(buff)
 }
 
-func (i *SimpleInt) UnmarshalRESP(r *bufio.Reader) error {
-	if err := peekAndAssert(r, SimpleIntType); err != nil {
-		return err
+func (i *SimpleInt) UnmarshalRESP(r *bufio.Reader) (n int, err error) {
+	if err = peekAndAssert(r, SimpleIntType); err != nil {
+		return
 	}
 
-	_, err := r.Discard(len(SimpleIntType))
+	n, err = r.Discard(len(SimpleIntType))
 	str, err := r.ReadSlice(TERMINATOR[0])
 	if err != nil {
-		return err
+		return
 	}
 
+	n += len(str)
 	val, err := strconv.ParseInt(string(str[:len(str)-1]), 10, 64)
 	if err != nil {
-		return err
+		return
 	}
-
 	i.I = val
-	return err
-
+	if _, err = r.Discard(len(TERMINATOR) - 1); err != nil {
+		return
+	}
+	n += len(TERMINATOR) - 1
+	return
 }
 
 // BulkString Represents RESP binary string
@@ -150,14 +153,14 @@ type BulkString struct {
 	EncodeNil bool
 }
 
-func (b BulkString) MarshalRESP(w io.Writer) error {
+func (b BulkString) MarshalRESP(w io.Writer) (int, error) {
+	// Marshal nil BulkString as $-1\r\n?
 	if b.EncodeNil && b.S == nil {
-		_, err := w.Write(BULKSTRINGNULL)
-		return err
+		return w.Write(BULKSTRINGNULL)
 	}
 
 	if b.S == nil {
-		return fmt.Errorf("nil BulkString with EncodeNil=false")
+		return 0, fmt.Errorf("nil BulkString with EncodeNil=false")
 	}
 
 	buff := make([]byte, 0, 16)
@@ -166,46 +169,47 @@ func (b BulkString) MarshalRESP(w io.Writer) error {
 	buff = append(buff, TERMINATOR...)
 	buff = append(buff, b.S...)
 	buff = append(buff, TERMINATOR...)
-	_, err := w.Write(buff)
-	return err
+	return w.Write(buff)
+
 }
 
 func (b *BulkString) String() string {
 	return string(b.S)
 }
 
-func (b *BulkString) UnmarshalRESP(r *bufio.Reader) error {
-	if err := peekAndAssert(r, BulkStringType); err != nil {
-		return err
+func (b *BulkString) UnmarshalRESP(r *bufio.Reader) (n int, err error) {
+	if err = peekAndAssert(r, BulkStringType); err != nil {
+		return
 	}
 
-	_, err := r.Discard(len(BulkStringType))
+	n, err = r.Discard(len(BulkStringType))
 	str, err := r.ReadSlice(TERMINATOR[0])
 	if err != nil {
-		return err
+		return n, err
 	}
-
+	n += len(str)
 	length, err := strconv.ParseInt(string(str[:len(str)-1]), 10, 64)
 	if err != nil {
-		return err
+		return n, err
 	}
 
-	_, err = r.Discard(len(TERMINATOR) - 1)
+	discarded, err := r.Discard(len(TERMINATOR) - 1)
 	if err != nil {
-		return err
+		return n, err
 	}
-
+	n += discarded
 	if length == -1 {
 		b.EncodeNil = true
-		return nil
+		return n, nil
 	}
 	b.S = make([]byte, length)
-	_, err = io.ReadFull(r, b.S)
+	read, err := io.ReadFull(r, b.S)
 	if err != nil {
-		return err
+		return n, err
 	}
+	n += read
 	_, err = r.Discard(len(TERMINATOR))
-	return err
+	return n + len(TERMINATOR), err
 }
 
 type Array struct {
@@ -220,51 +224,52 @@ func (a *Array) AppendArray(arr *Array) {
 	a.A = append(a.A, arr.A...)
 }
 
-func (a Array) MarshalRESP(w io.Writer) error {
+func (a Array) MarshalRESP(w io.Writer) (int, error) {
 	buff := make([]byte, 0, 64)
 	buff = append(buff, ArrayType...)
 	buff = strconv.AppendInt(buff, int64(len(a.A)), 10)
 	buff = append(buff, TERMINATOR...)
 	elementsBuff := bytes.NewBuffer(make([]byte, 0, 64))
 	for _, v := range a.A {
-		err := v.MarshalRESP(elementsBuff)
+		n, err := v.MarshalRESP(elementsBuff)
 		if err != nil {
-			return err
+			return n, err
 		}
 	}
 	buff = append(buff, elementsBuff.Bytes()...)
-	_, err := w.Write(buff)
-	return err
+	return w.Write(buff)
 }
 
-func (a *Array) UnmarshalRESP(r *bufio.Reader) error {
-	if err := peekAndAssert(r, ArrayType); err != nil {
-		return err
+func (a *Array) UnmarshalRESP(r *bufio.Reader) (n int, err error) {
+	if err = peekAndAssert(r, ArrayType); err != nil {
+		return n, err
 	}
 
-	_, err := r.Discard(len(ArrayType))
+	n, err = r.Discard(len(ArrayType))
 	str, err := r.ReadSlice(TERMINATOR[0])
 	if err != nil {
-		return err
+		return n, err
 	}
-
+	n += len(str)
 	length, err := strconv.ParseInt(string(str[:len(str)-1]), 10, 64)
 	if err != nil {
-		return err
+		return n, err
 	}
 	if _, err = r.Discard(len(TERMINATOR) - 1); err != nil {
-		return err
+		return n, err
 	}
+	n += len(TERMINATOR) - 1
 	a.A = make([]Marshaller, length)
 	for i := 0; i < int(length); i++ {
 		var resp AnyResp
-		err := resp.UnmarshalRESP(r)
+		read, err := resp.UnmarshalRESP(r)
 		if err != nil {
-			return err
+			return n, err
 		}
+		n += read
 		a.A[i] = resp.I.(Marshaller)
 	}
-	return nil
+	return n, nil
 }
 
 type AnyResp struct {
@@ -288,7 +293,7 @@ func convertAnyIntToInt64(a interface{}) int64 {
 	return 0
 }
 
-func (a AnyResp) MarshalRESP(w io.Writer) error {
+func (a AnyResp) MarshalRESP(w io.Writer) (n int, err error) {
 	switch v := a.I.(type) {
 	case Marshaller:
 		return v.MarshalRESP(w)
@@ -313,67 +318,68 @@ func (a AnyResp) MarshalRESP(w io.Writer) error {
 		arrayPrefix = strconv.AppendInt(arrayPrefix, int64(len(v)), 10)
 		arrayPrefix = append(arrayPrefix, TERMINATOR...)
 		arrayBuff := bytes.NewBuffer(arrayPrefix)
+		var read int
 		for _, i := range v {
 			resp := AnyResp{I: i}
-			if err := resp.MarshalRESP(arrayBuff); err != nil {
-				return err
+			if read, err = resp.MarshalRESP(arrayBuff); err != nil {
+				return n, err
 			}
+			n += read
 		}
-		_, err := w.Write(arrayBuff.Bytes())
-		return err
+		return w.Write(arrayBuff.Bytes())
 	case []Marshaller:
 		arr := Array{A: v}
 		return arr.MarshalRESP(w)
 	}
 
-	return fmt.Errorf("unknown RESP type: %T", a.I)
+	return n, fmt.Errorf("unknown RESP type: %T", a.I)
 }
 
-func (a *AnyResp) UnmarshalRESP(r *bufio.Reader) error {
+func (a *AnyResp) UnmarshalRESP(r *bufio.Reader) (n int, err error) {
 	peeked, err := r.Peek(1)
 	if err != nil {
-		return err
+		return n, err
 	}
 	switch peeked[0] {
 	case SimpleStringType[0]:
 		var s SimpleString
-		err = s.UnmarshalRESP(r)
+		n, err = s.UnmarshalRESP(r)
 		if err != nil {
-			return err
+			return n, err
 		}
 		a.I = s
 	case SimpleErrorType[0]:
 		var e SimpleError
-		err = e.UnmarshalRESP(r)
+		n, err = e.UnmarshalRESP(r)
 		if err != nil {
-			return err
+			return n, err
 		}
 		a.I = e
 	case SimpleIntType[0]:
 		var i SimpleInt
-		err = i.UnmarshalRESP(r)
+		n, err = i.UnmarshalRESP(r)
 		if err != nil {
-			return err
+			return n, err
 		}
 		a.I = i
 	case BulkStringType[0]:
 		var b BulkString
-		err = b.UnmarshalRESP(r)
+		n, err = b.UnmarshalRESP(r)
 		if err != nil {
-			return err
+			return n, err
 		}
 		a.I = b
 	case ArrayType[0]:
 		var arr Array
-		err = arr.UnmarshalRESP(r)
+		n, err = arr.UnmarshalRESP(r)
 		if err != nil {
-			return err
+			return n, err
 		}
 		a.I = arr
 	default:
-		return fmt.Errorf("unknown RESP type: %s", peeked)
+		return n, fmt.Errorf("unknown RESP type: %s", peeked)
 	}
-	return nil
+	return n, nil
 }
 
 // TODO

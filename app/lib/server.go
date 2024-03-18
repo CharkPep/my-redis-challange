@@ -9,13 +9,14 @@ import (
 	"log"
 	"net"
 	"os"
+	"sync/atomic"
 	"time"
 )
 
 var (
 	READ_TIMEOUT = 10 * time.Second
 
-	PROPAGATION_CONSUMERS = 10
+	PROPAGATION_CONSUMERS = 1
 )
 
 type ServerConfig struct {
@@ -38,8 +39,8 @@ var DefaultConfig = &ServerConfig{
 	ConnectionWriteTimeout: time.Second * 2,
 	ReplicationConfig: &repl.ReplicationConfig{
 		Role:               "master",
-		MasterReplOffset:   0,
-		SecondReplOffset:   -1,
+		MasterReplOffset:   atomic.Uint64{},
+		SecondReplOffset:   atomic.Uint64{},
 		ConnectedSlaves:    0,
 		ReplBacklogActive:  0,
 		ReplBacklogSize:    1048576,
@@ -130,7 +131,7 @@ func (s *Server) ListenAndServe() error {
 			}
 			defer conn.Close()
 			s.logger.Printf("Accepted connection from %s", conn.RemoteAddr())
-			NewRequest(conn, s).Handle()
+			NewRequest(conn, s).Handle(s.router)
 		}(conn)
 	}
 }
@@ -146,7 +147,6 @@ func (s *Server) initPropagationConsumptionFromMaster() {
 						return
 					}
 				case req := <-s.propagation:
-					s.logger.Printf("Propagating %q in consumer %d", req.Args, i)
 					handler, err := s.router.ResolveRequest(req.Args)
 					if err != nil {
 						s.logger.Printf("Error resolving request: %s", err)
@@ -154,16 +154,18 @@ func (s *Server) initPropagationConsumptionFromMaster() {
 					}
 
 					req.Args.A = req.Args.A[1:]
-					res, err := handler.HandleResp(context.Background(), &RESPRequest{
-						S:      s,
+					_, err = handler.HandleResp(context.Background(), &RESPRequest{
 						Args:   req.Args,
-						Conn:   req.Conn,
 						Logger: s.logger,
+						s:      s,
+						W:      req.Writer,
 					})
+					log.Printf("Propagated %v in replica %d", req, s.config.Port)
 					if err != nil {
 						s.logger.Printf("ERROR: propagating to replica: %s", err)
 					}
-					log.Printf("Propagated %s to replica: %v", req.Args, res)
+					s.config.ReplicationConfig.MasterReplOffset.Add(uint64(req.N))
+					log.Printf("Offset: %d", s.config.ReplicationConfig.MasterReplOffset.Load())
 				}
 			}
 		}(i)

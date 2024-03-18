@@ -25,9 +25,12 @@ func TestMarshalSimpleString(t *testing.T) {
 	}
 	for _, tc := range tests {
 		var b bytes.Buffer
-		err := tc.input.MarshalRESP(&b)
+		n, err := tc.input.MarshalRESP(&b)
 		if err != nil {
 			t.Errorf("unexpected error: %s", err)
+		}
+		if n != len(tc.expected) {
+			t.Errorf("i %d, got %d", len(tc.expected), n)
 		}
 		if b.String() != tc.expected {
 			t.Errorf("i %q, got %q", tc.expected, b.String())
@@ -53,9 +56,12 @@ func TestUnmarshalSimpleString(t *testing.T) {
 	for _, test := range tests {
 		var s SimpleString
 		r := bufio.NewReader(bytes.NewReader(test.input))
-		err := s.UnmarshalRESP(r)
+		n, err := s.UnmarshalRESP(r)
 		if err != nil {
 			t.Errorf("unexpected error: %s", err)
+		}
+		if n != len(test.input) {
+			t.Errorf("i %d, got %d", len(test.input), n)
 		}
 		if s != test.expected {
 			t.Errorf("i %v, got %v", test.expected, s)
@@ -80,9 +86,12 @@ func TestSimpleError_MarshalRESP(t *testing.T) {
 	}
 	for _, tc := range tests {
 		var b bytes.Buffer
-		err := tc.input.MarshalRESP(&b)
+		n, err := tc.input.MarshalRESP(&b)
 		if err != nil {
 			t.Errorf("unexpected error: %s", err)
+		}
+		if n != len(tc.expected) {
+			t.Errorf("i %d, got %d", len(tc.expected), n)
 		}
 		if b.String() != tc.expected {
 			t.Errorf("i %q, got %q", tc.expected, b.String())
@@ -108,9 +117,12 @@ func TestSimpleError_UnmarshalRESP(t *testing.T) {
 	for _, test := range tests {
 		var s SimpleError
 		r := bufio.NewReader(bytes.NewReader(test.input))
-		err := s.UnmarshalRESP(r)
+		n, err := s.UnmarshalRESP(r)
 		if err != nil {
 			t.Errorf("unexpected error: %s", err)
+		}
+		if n != len(test.input) {
+			t.Errorf("i %d, got %d", len(test.input), n)
 		}
 		if s != test.expected {
 			t.Errorf("i %v, got %v", test.expected, s)
@@ -139,9 +151,12 @@ func TestSimpleInt_MarshalRESP(t *testing.T) {
 	}
 	for _, tc := range tests {
 		var b bytes.Buffer
-		err := tc.input.MarshalRESP(&b)
+		n, err := tc.input.MarshalRESP(&b)
 		if err != nil {
 			t.Errorf("unexpected error: %s", err)
+		}
+		if n != len(tc.expected) {
+			t.Errorf("i %d, got %d", len(tc.expected), n)
 		}
 		if b.String() != tc.expected {
 			t.Errorf("i %q, got %q", tc.expected, b.String())
@@ -171,9 +186,12 @@ func TestSimpleInt_UnmarshalRESP(t *testing.T) {
 	for _, test := range tests {
 		var s SimpleInt
 		r := bufio.NewReader(bytes.NewReader(test.input))
-		err := s.UnmarshalRESP(r)
+		n, err := s.UnmarshalRESP(r)
 		if err != nil {
 			t.Errorf("unexpected error: %s", err)
+		}
+		if n != len(test.input) {
+			t.Errorf("i %d, got %d", len(test.input), n)
 		}
 		if s != test.expected {
 			t.Errorf("i %v, got %v", test.expected, s)
@@ -202,26 +220,19 @@ func TestBulkString_MarshalRESP(t *testing.T) {
 	}
 	for _, tc := range tests {
 		var b bytes.Buffer
-		err := tc.input.MarshalRESP(&b)
+		n, err := tc.input.MarshalRESP(&b)
 		if err != nil {
 			t.Errorf("unexpected error: %s", err)
 		}
-		if !CompareTwoByteSlices(b.Bytes(), []byte(tc.expected)) {
+
+		if n != len(tc.expected) {
+			t.Errorf("i %d, got %d", len(tc.expected), n)
+		}
+
+		if !bytes.Equal(b.Bytes(), []byte(tc.expected)) {
 			t.Errorf("i %q, got %q", []byte(tc.expected), b.Bytes())
 		}
 	}
-}
-
-func CompareTwoByteSlices(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i, val := range a {
-		if val != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 func TestBulkString_UnmarshalRESP(t *testing.T) {
@@ -247,9 +258,12 @@ func TestBulkString_UnmarshalRESP(t *testing.T) {
 	for _, tc := range tcs {
 		var s BulkString
 		r := bufio.NewReader(bytes.NewReader(tc.input))
-		err := s.UnmarshalRESP(r)
+		n, err := s.UnmarshalRESP(r)
 		if err != nil {
 			t.Errorf("unexpected error: %s", err)
+		}
+		if n != len(tc.input) {
+			t.Errorf("i %d, got %d", len(tc.input), n)
 		}
 		if !AssertBulkString(s, tc.expected) {
 			t.Errorf("i %v, got %v", tc.expected, s)
@@ -288,10 +302,15 @@ func TestRespArray_MarshalRESP(t *testing.T) {
 
 	for _, test := range tc {
 		var b bytes.Buffer
-		err := test.i.MarshalRESP(&b)
+		n, err := test.i.MarshalRESP(&b)
 		if err != nil {
 			t.Errorf("unexpected error: %s", err)
 		}
+
+		if n != len(test.o) {
+			t.Errorf("i %d, got %d", len(test.o), n)
+		}
+
 		if b.String() != string(test.o) {
 			t.Errorf("i %q, got %q", test.o, b.String())
 		}
@@ -320,9 +339,12 @@ func TestRespArray_UnmarshalRESP(t *testing.T) {
 	for _, test := range tc {
 		var s Array
 		r := bufio.NewReader(bytes.NewReader(test.i))
-		err := s.UnmarshalRESP(r)
+		n, err := s.UnmarshalRESP(r)
 		if err != nil {
 			t.Errorf("unexpected error: %s", err)
+		}
+		if n != len(test.i) {
+			t.Errorf("i %d, got %d", len(test.i), n)
 		}
 		if !AssertRespArray(s, test.expected) {
 			t.Errorf("i %v, got %v", test.expected, s)
@@ -380,9 +402,12 @@ func TestSimplePrimitivesInAnyResp_UnmarshalRESP(t *testing.T) {
 	for _, test := range tests {
 		var s AnyResp
 		r := bufio.NewReader(bytes.NewReader(test.input))
-		err := s.UnmarshalRESP(r)
+		n, err := s.UnmarshalRESP(r)
 		if err != nil {
 			t.Errorf("unexpected error: %s", err)
+		}
+		if n != len(test.input) {
+			t.Errorf("i %d, got %d", len(test.input), n)
 		}
 		if !AssertAny(s, test.expected) {
 			t.Errorf("i %v, got %v", test.expected, s)
@@ -420,11 +445,14 @@ func TestAnyResp_MarshalRESP(t *testing.T) {
 
 	for _, tc := range tests {
 		var b bytes.Buffer
-		err := tc.input.MarshalRESP(&b)
+		n, err := tc.input.MarshalRESP(&b)
 		if err != nil {
 			t.Errorf("unexpected error: %s", err)
 		}
-		if !CompareTwoByteSlices(b.Bytes(), []byte(tc.expected)) {
+		if n != len(tc.expected) {
+			t.Errorf("i %d, got %d", len(tc.expected), n)
+		}
+		if !bytes.Equal(b.Bytes(), []byte(tc.expected)) {
 			t.Errorf("i %q, got %q", tc.expected, b.String())
 		}
 	}
@@ -454,9 +482,12 @@ func TestAnyResp_MarshalRESP2(t *testing.T) {
 	}
 	for _, test := range tests {
 		var b bytes.Buffer
-		err := AnyResp{I: test.i}.MarshalRESP(&b)
+		n, err := AnyResp{I: test.i}.MarshalRESP(&b)
 		if err != nil {
 			t.Errorf("unexpected error: %s", err)
+		}
+		if n != len(test.o) {
+			t.Errorf("i %d, got %d", len(test.o), n)
 		}
 		if b.String() != test.o {
 			t.Errorf("i %q, got %q", test.o, b.String())
@@ -503,9 +534,12 @@ func TestAnyResp_UnmarshalRESPAndMarshalRESP(t *testing.T) {
 		var marshaled AnyResp
 		marshaled.I = test.output.I
 		buff := bytes.NewBuffer([]byte{})
-		err := marshaled.MarshalRESP(buff)
+		n, err := marshaled.MarshalRESP(buff)
 		if err != nil {
 			t.Errorf("unexpected error: %s", err)
+		}
+		if n != len(test.input) {
+			t.Errorf("expected %d, got %d", n, len(test.input))
 		}
 		if buff.String() != string(test.input) {
 			t.Errorf("i %q, got %q", test.input, buff.String())
@@ -517,13 +551,16 @@ func TestAnyResp_UnmarshalRESPAndMarshalRESP(t *testing.T) {
 			t.Errorf("unexpected error: %s", err)
 		}
 		r := bufio.NewReader(bytes.NewReader(test.input))
-		err = unmarshaled.UnmarshalRESP(r)
+		n, err = unmarshaled.UnmarshalRESP(r)
 		if err != nil {
 			t.Errorf("unexpected error: %s", err)
 		}
 		val := reflect.ValueOf(unmarshaled)
 		if val.Kind() == reflect.Ptr {
 			val = val.Elem()
+		}
+		if n != len(test.input) {
+			t.Errorf("expected %d, got %d", n, len(test.input))
 		}
 		if AssertAny(val.Interface().(AnyResp), test.output) {
 			t.Errorf("i %v, got %q", test.output, val)
@@ -556,7 +593,7 @@ func TestSimpleString_UnmarshalRESP(t *testing.T) {
 	for _, test := range tests {
 		var s SimpleString
 		r := bufio.NewReader(bytes.NewReader(test.input))
-		err := s.UnmarshalRESP(r)
+		_, err := s.UnmarshalRESP(r)
 		if err != nil {
 			t.Errorf("unexpected error: %s", err)
 		}

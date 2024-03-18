@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -18,8 +19,11 @@ type ReplicaOf struct {
 }
 
 type REPLRequest struct {
-	Conn net.Conn
-	Args *resp.Array
+	Logger *log.Logger
+	Writer io.Writer
+	Args   *resp.Array
+	// Length in bytes of the Args array read from the reader
+	N int
 }
 
 func (r *ReplicaOf) GetAddr() net.Addr {
@@ -32,7 +36,7 @@ func NewReplicaOf(host, port string, propagation chan<- *REPLRequest) (*ReplicaO
 	if err != nil {
 		return nil, err
 	}
-	logger := log.New(os.Stdout, fmt.Sprintf("replica %s: ", port), log.LstdFlags|log.Lshortfile)
+	logger := log.New(os.Stdout, fmt.Sprintf("replica %s of %s: ", port, host), log.LstdFlags|log.Lshortfile)
 	logger.Printf("Connected to master %s", conn.RemoteAddr())
 	repl := &ReplicaOf{
 		logger:      logger,
@@ -78,11 +82,11 @@ func (r *ReplicaOf) ReadRDB() (*resp.Rdb, error) {
 
 func (r *ReplicaOf) pingMaster() error {
 	var err error
-	if err = (resp.Array{A: []resp.Marshaller{resp.BulkString{S: []byte("PING")}}}.MarshalRESP(r.conn)); err != nil {
+	if _, err = (resp.Array{A: []resp.Marshaller{resp.BulkString{S: []byte("PING")}}}.MarshalRESP(r.conn)); err != nil {
 		return err
 	}
 	res := resp.SimpleString{}
-	if err := res.UnmarshalRESP(r.r); err != nil {
+	if _, err := res.UnmarshalRESP(r.r); err != nil {
 		return err
 	}
 
@@ -95,12 +99,12 @@ func (r *ReplicaOf) pingMaster() error {
 
 func (r *ReplicaOf) replConfPort(port string) error {
 	var err error
-	if err = (resp.Array{A: []resp.Marshaller{resp.BulkString{S: []byte("REPLCONF")}, resp.BulkString{S: []byte("listening-port")}, resp.BulkString{S: []byte(port)}}}.MarshalRESP(r.conn)); err != nil {
+	if _, err = (resp.Array{A: []resp.Marshaller{resp.BulkString{S: []byte("REPLCONF")}, resp.BulkString{S: []byte("listening-port")}, resp.BulkString{S: []byte(port)}}}.MarshalRESP(r.conn)); err != nil {
 		return err
 	}
 
 	res := resp.SimpleString{}
-	if err := res.UnmarshalRESP(r.r); err != nil {
+	if _, err := res.UnmarshalRESP(r.r); err != nil {
 		return err
 	}
 
@@ -113,11 +117,11 @@ func (r *ReplicaOf) replConfPort(port string) error {
 
 func (r *ReplicaOf) replConfCapa() error {
 	var err error
-	if err = (resp.Array{A: []resp.Marshaller{resp.BulkString{S: []byte("REPLCONF")}, resp.BulkString{S: []byte("capa")}, resp.BulkString{S: []byte("psync2")}}}.MarshalRESP(r.conn)); err != nil {
+	if _, err = (resp.Array{A: []resp.Marshaller{resp.BulkString{S: []byte("REPLCONF")}, resp.BulkString{S: []byte("capa")}, resp.BulkString{S: []byte("psync2")}}}.MarshalRESP(r.conn)); err != nil {
 		return err
 	}
 	res := resp.SimpleString{}
-	if err := res.UnmarshalRESP(r.r); err != nil {
+	if _, err := res.UnmarshalRESP(r.r); err != nil {
 		return err
 	}
 	if res.S != "OK" {
@@ -127,11 +131,11 @@ func (r *ReplicaOf) replConfCapa() error {
 }
 
 func (r *ReplicaOf) pSync() error {
-	if err := (resp.Array{A: []resp.Marshaller{resp.BulkString{S: []byte("PSYNC")}, resp.BulkString{S: []byte("?")}, resp.BulkString{S: []byte("-1")}}}.MarshalRESP(r.conn)); err != nil {
+	if _, err := (resp.Array{A: []resp.Marshaller{resp.BulkString{S: []byte("PSYNC")}, resp.BulkString{S: []byte("?")}, resp.BulkString{S: []byte("-1")}}}.MarshalRESP(r.conn)); err != nil {
 		return err
 	}
 	res := resp.SimpleString{}
-	if err := res.UnmarshalRESP(r.r); err != nil {
+	if _, err := res.UnmarshalRESP(r.r); err != nil {
 		return err
 	}
 	r.logger.Printf("Got PSYNC response: %s", res)
@@ -139,21 +143,33 @@ func (r *ReplicaOf) pSync() error {
 }
 
 func (r *ReplicaOf) ListenAndAccept() error {
-	var (
-		err error
-	)
 	r.logger.Printf("Listening for propagation from %s", r.conn.RemoteAddr())
 	for {
-		args := resp.Array{}
-		if err = args.UnmarshalRESP(r.r); err != nil {
-			r.logger.Printf("Error reading from master: %s", err)
-			return err
+		var (
+			args resp.Array
+			err  error
+			n    int
+		)
+
+		if n, err = args.UnmarshalRESP(r.r); err != nil && err != io.EOF {
+			r.logger.Printf("Error reading request from master: %s", err)
+			continue
 		}
 
-		r.logger.Printf("Got propagation: %s", args)
-		r.propagation <- &REPLRequest{
-			Conn: r.conn,
-			Args: &args,
+		r.logger.Printf("Read %d bytes from %s", n, r.conn.RemoteAddr())
+
+		if err == io.EOF {
+			r.logger.Printf("Connection closed by %s", r.conn.RemoteAddr())
+			return nil
 		}
+
+		r.propagation <- &REPLRequest{
+			Writer: r.conn,
+			Args:   &args,
+			N:      n,
+			Logger: r.logger,
+		}
+
 	}
+
 }

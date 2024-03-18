@@ -30,7 +30,7 @@ func EstablishReplicaMaster(replica net.Conn) error {
 
 	replica.Write([]byte("*3\r\n$5\r\npsyncr\n$1\r\n?\r\n$2\r\n-1\r\n"))
 	r := bufio.NewReader(replica)
-	if err := (&resp.SimpleString{}).UnmarshalRESP(r); err != nil {
+	if _, err := (&resp.SimpleString{}).UnmarshalRESP(r); err != nil {
 		return err
 	}
 	if err := (&resp.Rdb{}).UnmarshalRESP(r); err != nil {

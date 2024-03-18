@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"sync/atomic"
 	"testing"
 )
 
@@ -29,11 +30,11 @@ func TestPsyncHandler_HandleResp(t *testing.T) {
 						resp.BulkString{S: []byte("0")},
 					},
 				},
-				S: &Server{
+				s: &Server{
 					config: &ServerConfig{
 						ReplicationConfig: &repl.ReplicationConfig{
 							MasterReplid:     "123",
-							MasterReplOffset: 0,
+							MasterReplOffset: atomic.Uint64{},
 						},
 					},
 				},
@@ -49,7 +50,7 @@ func TestPsyncHandler_HandleResp(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		srv, client := net.Pipe()
-		test.input.Conn = client
+		test.input.conn = client
 		errChan := make(chan error)
 		go func(req *RESPRequest) {
 			_, err := h.HandleResp(ctx, test.input)
@@ -57,7 +58,7 @@ func TestPsyncHandler_HandleResp(t *testing.T) {
 		}(test.input)
 
 		fullResync := resp.SimpleString{}
-		if err := fullResync.UnmarshalRESP(bufio.NewReader(srv)); err != nil {
+		if _, err := fullResync.UnmarshalRESP(bufio.NewReader(srv)); err != nil {
 			t.Fatalf("unexpected error: %s", err)
 		}
 		rdb := resp.Rdb{}
