@@ -73,15 +73,15 @@ func (p PsyncHandler) HandleResp(ctx context.Context, req *RESPRequest) (interfa
 	if err := req.conn.SetWriteDeadline(time.Time{}); err != nil {
 		return nil, err
 	}
-	req.s.config.ReplicationConfig.ConnectedSlaves += 1
+	req.s.config.ReplicationConfig.ConnectedSlaves.Add(1)
 	req.Logger.Printf("Replica connected: %s", req.RAddr)
 	<-ctx.Done()
-	req.s.config.ReplicationConfig.ConnectedSlaves += -1
+	req.s.config.ReplicationConfig.ConnectedSlaves.Swap(uint64(req.s.config.ReplicationConfig.ConnectedSlaves.Load() - 1))
 	return nil, nil
 }
 
 type WaitHandler struct{}
 
 func (w WaitHandler) HandleResp(ctx context.Context, req *RESPRequest) (interface{}, error) {
-	return 0, nil
+	return int(req.s.config.ReplicationConfig.ConnectedSlaves.Load()), nil
 }

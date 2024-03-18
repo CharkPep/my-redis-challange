@@ -41,7 +41,7 @@ var DefaultConfig = &ServerConfig{
 		Role:               "master",
 		MasterReplOffset:   atomic.Uint64{},
 		SecondReplOffset:   atomic.Uint64{},
-		ConnectedSlaves:    0,
+		ConnectedSlaves:    atomic.Uint64{},
 		ReplBacklogActive:  0,
 		ReplBacklogSize:    1048576,
 		ReplBacklogFirst:   0,

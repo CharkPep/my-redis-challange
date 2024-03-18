@@ -9,7 +9,7 @@ import (
 
 type ReplicationConfig struct {
 	Role               string
-	ConnectedSlaves    int
+	ConnectedSlaves    atomic.Uint64
 	MasterReplid       string
 	MasterReplOffset   atomic.Uint64
 	SecondReplOffset   atomic.Uint64
@@ -31,7 +31,7 @@ func (r *ReplicationConfig) MarshalRESP(w io.Writer) (int, error) {
 					repl_backlog_histlen:%d`
 	return resp.BulkString{S: []byte(fmt.Sprintf(format,
 		r.Role,
-		r.ConnectedSlaves,
+		r.ConnectedSlaves.Load(),
 		r.MasterReplid,
 		r.MasterReplOffset.Load(),
 		-1,
