@@ -61,14 +61,13 @@ type Server struct {
 	router      *Router
 	propagation chan *repl.REPLRequest
 	replicaOf   *repl.ReplicaOf
-	replicas    []*repl.Replica
+	slaves      []*repl.Slave
 }
 
 func (s *Server) PropagateToAll(buff []byte) {
-	s.logger.Printf("Propagating to all replicas, %d", len(s.replicas))
-	for _, r := range s.replicas {
+	s.logger.Printf("Propagating to all slaves, %d", len(s.slaves))
+	for _, r := range s.slaves {
 		if _, err := r.Propagate(buff); err != nil {
-			//TODO resync replica
 			s.logger.Printf("Error writing to replica: %s", err)
 		}
 	}
@@ -98,7 +97,7 @@ func New(config *ServerConfig, router *Router) (*Server, error) {
 		listener:    listener,
 		router:      router,
 		close:       make(chan struct{}),
-		replicas:    make([]*repl.Replica, 0, 4),
+		slaves:      make([]*repl.Slave, 0, 4),
 		config:      config,
 		propagation: propagation,
 	}, err
@@ -155,10 +154,11 @@ func (s *Server) initPropagationConsumptionFromMaster() {
 
 					req.Args.A = req.Args.A[1:]
 					_, err = handler.HandleResp(context.Background(), &RESPRequest{
-						Args:   req.Args,
-						Logger: s.logger,
-						s:      s,
-						W:      req.Writer,
+						Args:          req.Args,
+						Logger:        s.logger,
+						s:             s,
+						W:             req.Writer,
+						IsPropagation: true,
 					})
 					log.Printf("Propagated %v in replica %d", req, s.config.Port)
 					if err != nil {

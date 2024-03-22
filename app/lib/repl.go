@@ -25,5 +25,8 @@ func (h ReplWrapper) HandleResp(ctx context.Context, req *RESPRequest) (interfac
 	arr.AppendArray(req.Args)
 	arr.MarshalRESP(buff)
 	req.s.PropagateToAll(buff.Bytes())
+	if !req.IsPropagation {
+		req.s.config.ReplicationConfig.MasterReplOffset.Add(uint64(len(buff.Bytes())))
+	}
 	return res, nil
 }

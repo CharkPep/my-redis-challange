@@ -69,15 +69,16 @@ func SetupReplicaOf(tb testing.TB, replOf string, port int) (func(tb testing.TB)
 
 func TestServerShouldAcceptConnection(t *testing.T) {
 	teardown := SetupMaster(t)
+	defer teardown(t)
 	_, err := net.Dial("tcp", fmt.Sprintf(":%d", PORT))
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
 	}
-	teardown(t)
 }
 
 func TestServerShouldReturnPong(t *testing.T) {
 	teardown := SetupMaster(t)
+	defer teardown(t)
 	conn, err := net.Dial("tcp", fmt.Sprintf(":%d", PORT))
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
@@ -91,7 +92,6 @@ func TestServerShouldReturnPong(t *testing.T) {
 	if string(buf[:n]) != "+PONG\r\n" {
 		t.Errorf("expected +PONG\n, got %s", string(buf[:n]))
 	}
-	teardown(t)
 }
 
 func TestServerShouldReturnEcho(t *testing.T) {
@@ -119,6 +119,7 @@ func TestServerShouldReturnEcho(t *testing.T) {
 		},
 	}
 	teardown := SetupMaster(t)
+	defer teardown(t)
 	t.Run("echo", func(t *testing.T) {
 		for i, test := range tests {
 			t.Run(fmt.Sprintf("echo:%d", i), func(ts *testing.T) {
@@ -148,11 +149,11 @@ func TestServerShouldReturnEcho(t *testing.T) {
 			})
 		}
 	})
-	teardown(t)
 }
 
 func TestShouldReturnOK(t *testing.T) {
 	teardown := SetupMaster(t)
+	defer teardown(t)
 	n := 10
 	client, err := net.Dial("tcp", fmt.Sprintf(":%d", PORT))
 	if err != nil {
@@ -168,11 +169,11 @@ func TestShouldReturnOK(t *testing.T) {
 			t.Errorf("unexpected error: %s", err)
 		}
 	}
-	teardown(t)
 }
 
 func TestHandshakeWithMaster(t *testing.T) {
 	teardown := SetupMaster(t)
+	defer teardown(t)
 	replica, err := net.Dial("tcp", ":6379")
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
@@ -180,11 +181,11 @@ func TestHandshakeWithMaster(t *testing.T) {
 	if err := utils.EstablishReplicaMaster(replica); err != nil {
 		t.Error(err)
 	}
-	teardown(t)
 }
 
 func TestSingleReplicaPropagation(t *testing.T) {
 	teardown := SetupMaster(t)
+	defer teardown(t)
 	replica, err := utils.ConnectReplica(fmt.Sprintf(":%d", PORT))
 	if err != nil {
 		t.Fatalf("Failed to connect replica: %s", err)
@@ -210,12 +211,12 @@ func TestSingleReplicaPropagation(t *testing.T) {
 	if string(buf[:n]) != expect {
 		t.Errorf("Propogation failed, expected %q, got %q", expect, string(buf[:n]))
 	}
-	teardown(t)
 }
 
 func TestMultiReplicaPropagation(t *testing.T) {
 	N := 4
 	teardown := SetupMaster(t)
+	defer teardown(t)
 	replicas := make([]net.Conn, 0, 4)
 	for i := 0; i < N; i++ {
 		replica, err := utils.ConnectReplica(fmt.Sprintf(":%d", PORT))
@@ -271,12 +272,12 @@ func TestMultiReplicaPropagation(t *testing.T) {
 			}
 		}
 	}
-	teardown(t)
 }
 
 func TestReadIoTimeout(t *testing.T) {
 	t.Skip()
 	teardown := SetupMaster(t)
+	defer teardown(t)
 	client, err := net.DialTimeout("tcp", ":6379", 5*time.Second)
 	if err != nil {
 		t.Errorf("unexpected error: %s", err)
@@ -294,7 +295,6 @@ func TestReadIoTimeout(t *testing.T) {
 	if _, err = error.UnmarshalRESP(reader); err != nil {
 		t.Errorf("Unexpected error: %s", err)
 	}
-	teardown(t)
 }
 
 func TestPropagation(t *testing.T) {
@@ -302,8 +302,10 @@ func TestPropagation(t *testing.T) {
 		n   int
 		err error
 	)
-	teardownMaster := SetupMaster(t)
+	teardown := SetupMaster(t)
+	defer teardown(t)
 	teardownReplica, _ := SetupReplicaOf(t, fmt.Sprintf(":%d", PORT), 6380)
+	defer teardownReplica(t)
 	if err != nil {
 		t.Fatalf("Failed to create replica: %s", err)
 	}
@@ -342,12 +344,4 @@ func TestPropagation(t *testing.T) {
 			t.Errorf("expected %q, got %q", c.val, string(buf[:n]))
 		}
 	}
-	teardownReplica(t)
-	teardownMaster(t)
 }
-
-//func TestRegisterHandlers(t *testing.T) {
-//	teardownMaster := SetupMaster(t)
-//	teardownReplica, _ := SetupReplicaOf(t, fmt.Sprintf(":%d", PORT), 6380)
-//
-//}

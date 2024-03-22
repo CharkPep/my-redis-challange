@@ -15,11 +15,12 @@ type RESPRequest struct {
 	Logger *log.Logger
 	W      io.Writer
 	// for internal use
-	r     *bufio.Reader
-	s     *Server
-	Args  *resp.Array
-	RAddr net.Addr
-	conn  net.Conn
+	r             *bufio.Reader
+	s             *Server
+	Args          *resp.Array
+	RAddr         net.Addr
+	conn          net.Conn
+	IsPropagation bool
 }
 
 func NewRequest(rwc net.Conn, s *Server) *RESPRequest {

@@ -9,6 +9,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/lib/persistence"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/repl"
 	"log"
+	"strconv"
 	"time"
 )
 
@@ -41,7 +42,7 @@ func (c ReplConfHandler) HandleResp(ctx context.Context, req *RESPRequest) (inte
 				return nil, fmt.Errorf("ERR wrong number of arguments for command")
 			}
 			log.Printf("Adding replica on port %s", req.Args.A[1].(resp.BulkString).S)
-			req.s.replicas = append(req.s.replicas, repl.NewReplica(req.conn))
+			req.s.slaves = append(req.s.slaves, repl.NewReplica(req.conn, fmt.Sprint(len(req.s.slaves))))
 			return "OK", nil
 		case "capa", "CAPA":
 			return "OK", nil
@@ -73,8 +74,9 @@ func (p PsyncHandler) HandleResp(ctx context.Context, req *RESPRequest) (interfa
 	if err := req.conn.SetWriteDeadline(time.Time{}); err != nil {
 		return nil, err
 	}
+
 	req.s.config.ReplicationConfig.ConnectedSlaves.Add(1)
-	req.Logger.Printf("Replica connected: %s", req.RAddr)
+	req.Logger.Printf("Slave connected: %s", req.RAddr)
 	<-ctx.Done()
 	req.s.config.ReplicationConfig.ConnectedSlaves.Swap(uint64(req.s.config.ReplicationConfig.ConnectedSlaves.Load() - 1))
 	return nil, nil
@@ -83,5 +85,76 @@ func (p PsyncHandler) HandleResp(ctx context.Context, req *RESPRequest) (interfa
 type WaitHandler struct{}
 
 func (w WaitHandler) HandleResp(ctx context.Context, req *RESPRequest) (interface{}, error) {
-	return int(req.s.config.ReplicationConfig.ConnectedSlaves.Load()), nil
+	var (
+		// Wait for n slaves
+		n int64
+		// In-sync
+		N int64
+		// Timeout
+		timeout time.Duration
+	)
+	if len(req.Args.A) < 2 {
+		return nil, fmt.Errorf("ERR wrong number of arguments")
+	}
+
+	if v, ok := req.Args.A[0].(resp.BulkString); ok {
+		if v.S == nil {
+			return nil, fmt.Errorf("ERR invalid number of slaves")
+		}
+
+		i, err := strconv.ParseInt(string(v.S), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("ERR invalid number of slaves")
+		}
+		n = i
+	}
+
+	if v, ok := req.Args.A[1].(resp.BulkString); ok {
+		if v.S == nil {
+			return nil, fmt.Errorf("ERR invalid timeout")
+		}
+
+		i, err := strconv.ParseInt(string(v.S), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("ERR invalid timeout")
+		}
+		timeout = time.Duration(i) * time.Millisecond
+	}
+	acks := make(chan uint64)
+	req.Logger.Printf("Target offset: %d", req.s.config.ReplicationConfig.MasterReplOffset.Load())
+	for _, r := range req.s.slaves {
+		if r.GetOffset() >= req.s.config.ReplicationConfig.MasterReplOffset.Load() {
+			N++
+			go func(r *repl.Slave) {
+				r.GetAck(timeout)
+			}(r)
+			continue
+		}
+
+		go func(r *repl.Slave) {
+			offset, err := r.GetAck(timeout)
+			if err != nil {
+				req.Logger.Printf("Error getting ack: %s", err)
+			}
+			acks <- offset
+		}(r)
+	}
+
+	req.Logger.Printf("Waiting for %d slaves, total %d of %d", n, N, len(req.s.slaves))
+	for i := N; i < n; i++ {
+		select {
+		case offset := <-acks:
+			if offset > req.s.config.ReplicationConfig.MasterReplOffset.Load() {
+				N++
+			}
+
+			if N >= n {
+				break
+			}
+		case <-time.After(timeout):
+			break
+		}
+	}
+
+	return N, nil
 }
