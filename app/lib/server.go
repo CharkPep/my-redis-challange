@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/codecrafters-io/redis-starter-go/app/lib/persistence"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/repl"
 	"github.com/codecrafters-io/redis-starter-go/app/utils"
 	"log"
@@ -26,6 +27,7 @@ type ServerConfig struct {
 	ConnectionWriteTimeout time.Duration
 	ReplicaOf              string
 	ReplicationConfig      *repl.ReplicationConfig
+	PersistenceConfig      *persistence.Config
 }
 
 func GetDefaultConfig() *ServerConfig {
@@ -46,6 +48,10 @@ var DefaultConfig = &ServerConfig{
 		ReplBacklogSize:    1048576,
 		ReplBacklogFirst:   0,
 		ReplBacklogHistlen: 0,
+	},
+	PersistenceConfig: &persistence.Config{
+		Dir:  ".",
+		File: "dump.rdb",
 	},
 }
 

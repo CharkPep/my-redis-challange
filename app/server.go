@@ -30,6 +30,7 @@ func RegisterHandlers(router *lib.Router) {
 	replConfHandler := lib.ReplConfHandler{}
 	psyncHandler := lib.PsyncHandler{}
 	waitHander := lib.WaitHandler{}
+	configHandler := lib.ConfigHandler{}
 	//pconfHanlder := handlers.Replconf{}
 	router.RegisterHandler("ping", pingHandler)
 	router.RegisterHandler("PING", pingHandler)
@@ -47,6 +48,8 @@ func RegisterHandlers(router *lib.Router) {
 	router.RegisterHandler("PSYNC", psyncHandler)
 	router.RegisterHandler("wait", waitHander)
 	router.RegisterHandler("WAIT", waitHander)
+	router.RegisterHandler("config", configHandler)
+	router.RegisterHandler("CONFIG", configHandler)
 }
 func main() {
 	log.SetPrefix("redis-server:")
@@ -80,6 +83,16 @@ func main() {
 				log.Fatal("Failed to handshake with master: ", err)
 			}
 			config.ReplicaOf = args[i+1] + ":" + strconv.Itoa(int(port))
+		case "--dir":
+			if i+1 >= len(args) {
+				log.Fatal("Invalid replicaof")
+			}
+			config.PersistenceConfig.Dir = args[i+1]
+		case "--dbfilename":
+			if i+1 >= len(args) {
+				log.Fatal("Invalid replicaof")
+			}
+			config.PersistenceConfig.File = args[i+1]
 		}
 	}
 	router := lib.NewRouter()
