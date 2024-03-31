@@ -72,12 +72,12 @@ func NewReplicaOf(host, port string, propagation chan<- *REPLRequest) (*ReplicaO
 }
 
 func (r *ReplicaOf) ReadRDB() (*resp.Rdb, error) {
-	rdb := resp.Rdb{}
+	rdb := resp.NewRdb()
 	if err := rdb.UnmarshalRESP(r.r); err != nil {
 		return nil, err
 	}
-	r.logger.Printf("Got RDB: %d", len(rdb.Content))
-	return &rdb, nil
+	r.logger.Println("Got RDB")
+	return rdb, nil
 }
 
 func (r *ReplicaOf) pingMaster() error {

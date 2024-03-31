@@ -1,12 +1,16 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"github.com/codecrafters-io/redis-starter-go/app/lib"
+	"github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/handlers"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/storage"
 	"log"
 	"os"
+	"path"
+	"path/filepath"
 	"strconv"
 )
 
@@ -17,15 +21,19 @@ Usage: <build> [options]
 --replicaof <host> <port>	Make the server a slave of another instance
 `
 
+var (
+	stringsStorage = storage.New(nil)
+)
+
 func RegisterHandlers(router *lib.Router) {
 	//  As mentioned, though stupid af, in https://redis.io/commands/command/ the command is case-insensitive
 	// so we register the handler for both "ping" and "PING"
 	pingHandler := handlers.PingHandler{}
 	echoHandler := handlers.EchoHandler{}
-	stringsStore := storage.New(nil)
-	setHandler := handlers.StringsSetHandler{Storage: stringsStore}
+	setHandler := handlers.StringsSetHandler{Storage: stringsStorage}
 	replicatedSet := lib.NewReplicationWrapper(&setHandler)
-	getHandler := handlers.StringsGetHandler{Storage: stringsStore}
+	getHandler := handlers.StringsGetHandler{Storage: stringsStorage}
+	keysHandler := handlers.KeysHandler{Storage: stringsStorage}
 	infoHandler := lib.InfoHandler{}
 	replConfHandler := lib.ReplConfHandler{}
 	psyncHandler := lib.PsyncHandler{}
@@ -50,6 +58,7 @@ func RegisterHandlers(router *lib.Router) {
 	router.RegisterHandler("WAIT", waitHander)
 	router.RegisterHandler("config", configHandler)
 	router.RegisterHandler("CONFIG", configHandler)
+	router.RegisterHandler("keys", keysHandler)
 }
 func main() {
 	log.SetPrefix("redis-server:")
@@ -95,6 +104,39 @@ func main() {
 			config.PersistenceConfig.File = args[i+1]
 		}
 	}
+
+	if config.PersistenceConfig.Dir != "" && config.PersistenceConfig.File != "" {
+		absp, err := filepath.Abs(path.Join(config.PersistenceConfig.Dir, config.PersistenceConfig.File))
+		if err != nil {
+			os.Exit(1)
+		}
+
+		rdbf, err := os.Open(absp)
+		if err != nil {
+			log.Printf("Failed to open rdb file: %s, creating new one\n", err)
+			f, err := os.Create(absp)
+			if err != nil {
+				log.Panicf("Failed to create rdb file: %s", err)
+			}
+
+			if _, err = encoding.NewRdb().MarshalRESP(f); err != nil {
+				log.Fatal(err)
+			}
+
+			log.Printf("Created new rdb file: %s", absp)
+		} else {
+			r := bufio.NewReader(rdbf)
+			rdb := encoding.NewRdb()
+			if _, err := rdb.Load(r); err != nil {
+				fmt.Printf("Failed to unmarshal rdb: %s", err)
+				os.Exit(1)
+			}
+
+			rdb.Apply(stringsStorage)
+		}
+
+	}
+
 	router := lib.NewRouter()
 	RegisterHandlers(router)
 	server, err := lib.New(config, router)

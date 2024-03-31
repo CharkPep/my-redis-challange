@@ -7,6 +7,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/lib"
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/storage"
+	"regexp"
 	"strconv"
 	"time"
 )
@@ -22,7 +23,7 @@ type StringsGetHandler struct {
 type SetArgs struct {
 	Key    string
 	Value  string
-	Expire *time.Time
+	Expire time.Time
 	NX     bool
 	XX     bool
 	GET    bool
@@ -87,7 +88,7 @@ func parseSetArgs(args *[]resp.Marshaller) (*SetArgs, error) {
 				case resp.SimpleInt:
 					i++
 					expireTime := time.Now().Add(time.Duration(v.I) * time.Second)
-					setArgs.Expire = &expireTime
+					setArgs.Expire = expireTime
 				case resp.BulkString:
 					i++
 					parsedTime, err := strconv.ParseInt(string(v.S), 10, 64)
@@ -95,7 +96,7 @@ func parseSetArgs(args *[]resp.Marshaller) (*SetArgs, error) {
 						return nil, errors.New("ERR invalid expire time")
 					}
 					expireTime := time.Now().Add(time.Duration(parsedTime) * time.Second)
-					setArgs.Expire = &expireTime
+					setArgs.Expire = expireTime
 				default:
 					return nil, errors.New("ERR invalid expire time")
 				}
@@ -108,7 +109,7 @@ func parseSetArgs(args *[]resp.Marshaller) (*SetArgs, error) {
 				case resp.SimpleInt:
 					i++
 					expireTime := time.Now().Add(time.Duration(v.I) * time.Millisecond)
-					setArgs.Expire = &expireTime
+					setArgs.Expire = expireTime
 				case resp.BulkString:
 					i++
 					parsedTime, err := strconv.ParseInt(string(v.S), 10, 64)
@@ -116,7 +117,7 @@ func parseSetArgs(args *[]resp.Marshaller) (*SetArgs, error) {
 						return nil, errors.New("ERR invalid expire time")
 					}
 					expireTime := time.Now().Add(time.Duration(parsedTime) * time.Millisecond)
-					setArgs.Expire = &expireTime
+					setArgs.Expire = expireTime
 				default:
 					return nil, errors.New("ERR invalid expire time")
 				}
@@ -129,7 +130,7 @@ func parseSetArgs(args *[]resp.Marshaller) (*SetArgs, error) {
 				} else {
 					i++
 					expireTime := time.Unix(expire.I, 0)
-					setArgs.Expire = &expireTime
+					setArgs.Expire = expireTime
 				}
 			case "PXAT", "pxat":
 				if i+1 >= len(*args) {
@@ -140,7 +141,7 @@ func parseSetArgs(args *[]resp.Marshaller) (*SetArgs, error) {
 				} else {
 					i++
 					expireTime := time.UnixMilli(expire.I)
-					setArgs.Expire = &expireTime
+					setArgs.Expire = expireTime
 				}
 			case "GET", "get":
 				setArgs.GET = true
@@ -197,4 +198,28 @@ func (sh StringsGetHandler) HandleResp(ctx context.Context, req *lib.RESPRequest
 		return resp.BulkString{S: nil, EncodeNil: true}, nil
 	}
 	return []byte(value), nil
+}
+
+type KeysHandler struct {
+	Storage *storage.StringsStorage
+}
+
+func (c KeysHandler) HandleResp(ctx context.Context, req *lib.RESPRequest) (interface{}, error) {
+	if len(req.Args.A) != 1 {
+		return nil, fmt.Errorf("ERR wrong number of arguments")
+	}
+
+	_, ok := req.Args.A[0].(resp.BulkString)
+	if !ok {
+		return nil, fmt.Errorf("ERR invalid pattern type, expected string, got %T", req.Args.A[0])
+	}
+
+	reg := regexp.MustCompile(".*")
+	keys := c.Storage.Keys(reg)
+	array := make([]resp.Marshaller, 0, len(keys))
+	for _, key := range keys {
+		array = append(array, resp.BulkString{S: []byte(key)})
+	}
+
+	return resp.Array{A: array}, nil
 }

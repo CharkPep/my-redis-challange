@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
-	"github.com/codecrafters-io/redis-starter-go/app/lib/persistence"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/repl"
 	"log"
 	"strconv"
@@ -54,8 +53,7 @@ func (c ReplConfHandler) HandleResp(ctx context.Context, req *RESPRequest) (inte
 	return nil, fmt.Errorf("ERR invalid command")
 }
 
-type PsyncHandler struct {
-}
+type PsyncHandler struct{}
 
 func (p PsyncHandler) HandleResp(ctx context.Context, req *RESPRequest) (interface{}, error) {
 	req.Logger.Printf("Sending resync to %s", req.RAddr)
@@ -63,9 +61,9 @@ func (p PsyncHandler) HandleResp(ctx context.Context, req *RESPRequest) (interfa
 		req.s.config.ReplicationConfig.MasterReplOffset.Load())}).MarshalRESP(req.W); err != nil {
 		return nil, err
 	}
-	req.Logger.Printf("RDB length %d", len(persistence.GetEmpty().Content))
+
 	req.Logger.Printf("Sending full resync to %s", req.RAddr)
-	if err := persistence.GetEmpty().MarshalRESP(req.W); err != nil {
+	if _, err := resp.NewRdb().FullResync(req.W); err != nil {
 		return nil, err
 	}
 	if err := req.conn.SetReadDeadline(time.Time{}); err != nil {
@@ -125,6 +123,9 @@ func (w WaitHandler) HandleResp(ctx context.Context, req *RESPRequest) (interfac
 	for _, r := range req.s.slaves {
 		if r.GetOffset() >= req.s.config.ReplicationConfig.MasterReplOffset.Load() {
 			N++
+			// First of all why you read it?, second the tester on codecrafters is responding with offset that is a sum of
+			// prev_master_offset + len(set_message) + len(ack_message), why? idk, but as i cached responses to reduce round trips overhead
+			// i had to repeat GetAck for each slave, otherwise the tester will fail(((
 			go func(r *repl.Slave) {
 				r.GetAck(timeout)
 			}(r)
@@ -141,7 +142,6 @@ func (w WaitHandler) HandleResp(ctx context.Context, req *RESPRequest) (interfac
 	}
 
 	req.Logger.Printf("Waiting for %d slaves, total %d of %d", n, N, len(req.s.slaves))
-	//req.s.config.ReplicationConfig.MasterReplOffset.Add(37)
 	for i := N; i < n; i++ {
 		select {
 		case offset := <-acks:

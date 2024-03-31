@@ -1,4 +1,4 @@
-package resp
+package encoding
 
 import (
 	"bufio"
@@ -32,7 +32,8 @@ func peekAndAssert(r *bufio.Reader, expected []byte) error {
 	if err != nil {
 		return err
 	}
-	if string(peeked) != string(expected) {
+
+	if !bytes.Equal(peeked, expected) {
 		return fmt.Errorf("expected %s, got %s", expected, peeked)
 	}
 	return nil

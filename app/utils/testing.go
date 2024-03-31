@@ -33,7 +33,7 @@ func EstablishReplicaMaster(replica net.Conn) error {
 	if _, err := (&resp.SimpleString{}).UnmarshalRESP(r); err != nil {
 		return err
 	}
-	if err := (&resp.Rdb{}).UnmarshalRESP(r); err != nil {
+	if err := resp.NewRdb().UnmarshalRESP(r); err != nil {
 
 	}
 	return nil

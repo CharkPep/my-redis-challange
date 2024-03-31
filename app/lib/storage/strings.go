@@ -1,13 +1,14 @@
 package storage
 
 import (
+	"regexp"
 	"sync"
 	"time"
 )
 
 type StringsElement struct {
 	Value  string
-	Expire *time.Time
+	Expire time.Time
 }
 
 type StringsStorage struct {
@@ -20,9 +21,10 @@ const PICK_NUMBER = 20
 func (s *StringsStorage) cleanExpireKeys() {
 	cur := 0
 	for key, elem := range s.storage {
-		if elem.Expire != nil && elem.Expire.Before(time.Now()) {
+		if elem.Expire.Before(time.Now()) && !elem.Expire.IsZero() {
 			delete(s.storage, key)
 		}
+
 		cur++
 		if cur <= PICK_NUMBER {
 			return
@@ -43,24 +45,21 @@ func (s *StringsStorage) Delete(key string) {
 	delete(s.storage, key)
 }
 
-func New(hotCache *map[string]StringsElement) *StringsStorage {
-	//TODO: Implement and start cleanup worker
-
-	var cache map[string]StringsElement
-	if hotCache != nil {
-		cache = *hotCache
-	} else {
+func New(cache map[string]StringsElement) *StringsStorage {
+	if cache == nil {
 		cache = make(map[string]StringsElement)
 	}
+
 	stringStorage := &StringsStorage{
 		storage: cache,
 		mx:      &sync.RWMutex{},
 	}
+
 	go stringStorage.StartExpiryWorker()
 	return stringStorage
 }
 
-func (s *StringsStorage) Set(key string, value string, expire *time.Time) {
+func (s *StringsStorage) Set(key string, value string, expire time.Time) {
 	s.mx.Lock()
 	defer s.mx.Unlock()
 	s.storage[key] = StringsElement{
@@ -76,9 +75,26 @@ func (s *StringsStorage) Get(key string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	if elem.Expire != nil && elem.Expire.Before(time.Now()) {
+
+	if elem.Expire.Before(time.Now()) && !elem.Expire.IsZero() {
 		delete(s.storage, key)
 		return "", false
 	}
+
 	return elem.Value, true
+}
+
+func (s *StringsStorage) Keys(pattern *regexp.Regexp) []string {
+	keys := make([]string, 0, len(s.storage))
+	for key, elem := range s.storage {
+		if elem.Expire.Before(time.Now()) && !elem.Expire.IsZero() {
+			delete(s.storage, key)
+			continue
+		}
+		if pattern == nil || pattern.MatchString(key) {
+			keys = append(keys, key)
+		}
+	}
+
+	return keys
 }
