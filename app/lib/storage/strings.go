@@ -98,3 +98,11 @@ func (s *StringsStorage) Keys(pattern *regexp.Regexp) []string {
 
 	return keys
 }
+
+func (s *StringsStorage) Cp(other *StringsStorage) {
+	s.mx.Lock()
+	defer s.mx.Unlock()
+	for k, v := range other.storage {
+		s.storage[k] = v
+	}
+}

@@ -4,12 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/base64"
+	"encoding/binary"
 	"fmt"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/storage"
 	"io"
 	"log"
 	"os"
-	"regexp"
 	"strconv"
 	"time"
 )
@@ -78,10 +78,7 @@ func (rdb *Rdb) UnmarshalRESP(r *bufio.Reader) error {
 
 func (rd *Rdb) Apply(storage *storage.StringsStorage) {
 	for _, keys := range rd.keys {
-		for _, k := range keys.Keys(regexp.MustCompile(".*")) {
-			v, _ := keys.Get(k)
-			storage.Set(k, v, time.Time{})
-		}
+		storage.Cp(keys)
 	}
 }
 
@@ -132,8 +129,7 @@ func (rd *Rdb) Load(r *bufio.Reader) (N int, err error) {
 		return
 	}
 
-	rd.logger.Printf("Done parsing RDB file in %s", time.Since(start))
-	rd.logger.Printf("Keys: %v, %d", rd.keys, len(rd.keys))
+	rd.logger.Printf("Done parsing RDB file in %s, DBs: %d", time.Since(start), len(rd.keys))
 	return
 }
 
@@ -161,16 +157,29 @@ func (rd *Rdb) readDbKeys(r *bufio.Reader, db byte, resize, expire uint32) error
 		}
 
 		r.Discard(1)
+		expireTime := time.Time{}
 		switch b[0] {
 		case EOF, DB:
 			return nil
-		case EXPIRETIME, EXPIRETIMEMS:
+		case EXPIRETIME:
 			kvExpire := make([]byte, 4)
-			if _, err := r.Read(kvExpire); err != nil {
+			if _, err = r.Read(kvExpire); err != nil {
 				return err
 			}
-			// skip value type, suppose all KVs are strings
+			// discard value type
 			r.Discard(1)
+
+			expireTime = time.Unix(int64(binary.LittleEndian.Uint32(kvExpire)), 0)
+		case EXPIRETIMEMS:
+			kvExpire := make([]byte, 8)
+			if _, err = r.Read(kvExpire); err != nil {
+				return err
+			}
+
+			// discard value type
+			r.Discard(1)
+
+			expireTime = time.UnixMilli(int64(binary.LittleEndian.Uint64(kvExpire)))
 		}
 
 		key, err := DecodeString(r)
@@ -183,8 +192,8 @@ func (rd *Rdb) readDbKeys(r *bufio.Reader, db byte, resize, expire uint32) error
 			return err
 		}
 
-		rd.logger.Printf("DB: %d, Key: %s, Value: %s", db, key, value)
-		rd.keys[string(db)].Set(key, value, time.Time{})
+		rd.logger.Printf("DB: %d, Key: %s, Value: %s, Exp: %s", db, key, value, expireTime)
+		rd.keys[string(db)].Set(key, value, expireTime)
 
 	}
 }

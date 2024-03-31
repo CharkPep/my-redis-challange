@@ -194,6 +194,7 @@ func (sh StringsGetHandler) HandleResp(ctx context.Context, req *lib.RESPRequest
 		return nil, fmt.Errorf("ERR invalid key type, expected string, got %T", req.Args.A[0])
 	}
 	value, ok := sh.Storage.Get(string(key.S))
+	req.Logger.Printf("GETTING VALUE: %s\n", value)
 	if !ok {
 		return resp.BulkString{S: nil, EncodeNil: true}, nil
 	}
