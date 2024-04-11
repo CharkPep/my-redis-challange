@@ -1,9 +1,10 @@
-package repl
+package replication
 
 import (
 	"fmt"
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
 	"io"
+	"log"
 	"sync/atomic"
 )
 
@@ -29,6 +30,7 @@ func (r *ReplicationConfig) MarshalRESP(w io.Writer) (int, error) {
 					repl_backlog_size:%d
 					repl_backlog_first_byte_offset:%d
 					repl_backlog_histlen:%d`
+	log.Printf("Role %s", r.Role)
 	return resp.BulkString{S: []byte(fmt.Sprintf(format,
 		r.Role,
 		r.ConnectedSlaves.Load(),

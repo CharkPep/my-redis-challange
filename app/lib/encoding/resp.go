@@ -150,7 +150,7 @@ func (i *SimpleInt) UnmarshalRESP(r *bufio.Reader) (n int, err error) {
 // BulkString Represents RESP binary string
 type BulkString struct {
 	S []byte
-	// Encode nil as $-1\r\n, if false and S is nil, will return an error
+	// Encode nil as $-1\r\n, if false and S is nil, will marshal return an error
 	EncodeNil bool
 }
 
@@ -262,7 +262,7 @@ func (a *Array) UnmarshalRESP(r *bufio.Reader) (n int, err error) {
 	n += len(TERMINATOR) - 1
 	a.A = make([]Marshaller, length)
 	for i := 0; i < int(length); i++ {
-		var resp AnyResp
+		var resp Any
 		read, err := resp.UnmarshalRESP(r)
 		if err != nil {
 			return n, err
@@ -273,7 +273,7 @@ func (a *Array) UnmarshalRESP(r *bufio.Reader) (n int, err error) {
 	return n, nil
 }
 
-type AnyResp struct {
+type Any struct {
 	I                   interface{}
 	EncodeBulkStringNil bool
 }
@@ -294,10 +294,12 @@ func convertAnyIntToInt64(a interface{}) int64 {
 	return 0
 }
 
-func (a AnyResp) MarshalRESP(w io.Writer) (n int, err error) {
+func (a Any) MarshalRESP(w io.Writer) (n int, err error) {
 	switch v := a.I.(type) {
 	case Marshaller:
 		return v.MarshalRESP(w)
+	case fmt.Stringer:
+		return SimpleString{S: v.String()}.MarshalRESP(w)
 	case int, int8, int16, int32, int64:
 		i := SimpleInt{I: convertAnyIntToInt64(v)}
 		return i.MarshalRESP(w)
@@ -321,7 +323,7 @@ func (a AnyResp) MarshalRESP(w io.Writer) (n int, err error) {
 		arrayBuff := bytes.NewBuffer(arrayPrefix)
 		var read int
 		for _, i := range v {
-			resp := AnyResp{I: i}
+			resp := Any{I: i}
 			if read, err = resp.MarshalRESP(arrayBuff); err != nil {
 				return n, err
 			}
@@ -336,7 +338,7 @@ func (a AnyResp) MarshalRESP(w io.Writer) (n int, err error) {
 	return n, fmt.Errorf("unknown RESP type: %T", a.I)
 }
 
-func (a *AnyResp) UnmarshalRESP(r *bufio.Reader) (n int, err error) {
+func (a *Any) UnmarshalRESP(r *bufio.Reader) (n int, err error) {
 	peeked, err := r.Peek(1)
 	if err != nil {
 		return n, err

@@ -1,0 +1,47 @@
+[replication-14] Running tests for Replication > Stage #14: ACKs with no commands
+[replication-14] Master is running on port 6379
+[replication-14] $ ./spawn_redis_server.sh --port 6380 --replicaof localhost 6379
+[your_program] replica12:12:02.455986 redis.go:93: Failed to open rdb file: open /app/dump.rdb: no such file or directory, creating new one
+[your_program] replica12:12:02.456095 redis.go:103: Created new rdb file: /app/dump.rdb
+[replication-14] master: Received bytes: "*1\r\n$4\r\nPING\r\n"
+[replication-14] master: Received RESP value: ["PING"]
+[replication-14] Received ["PING"]
+[your_program] replica 6380 of localhost:6379: 2024/04/11 12:12:02 replof.go:42: Connected to master [::1]:6379
+[your_program] replica 6380 of localhost:6379: 2024/04/11 12:12:02 replof.go:51: Stage 1: PING
+[replication-14] master: Sent "PONG"
+[replication-14] master: Sent bytes: "+PONG\r\n"
+[replication-14] master: Received bytes: "*3\r\n$8\r\nREPLCONF\r\n$14\r\nlistening-port\r\n$4\r\n6380\r\n"
+[replication-14] master: Received RESP value: ["REPLCONF", "listening-port", "6380"]
+[replication-14] Received ["REPLCONF", "listening-port", "6380"]
+[replication-14] master: Sent "OK"
+[replication-14] master: Sent bytes: "+OK\r\n"
+[your_program] replica 6380 of localhost:6379: 2024/04/11 12:12:02 replof.go:55: Stage 2: PORT
+[your_program] replica 6380 of localhost:6379: 2024/04/11 12:12:02 replof.go:59: Stage 3: CAPA
+[replication-14] master: Received bytes: "*3\r\n$8\r\nREPLCONF\r\n$4\r\ncapa\r\n$6\r\npsync2\r\n"
+[replication-14] master: Received RESP value: ["REPLCONF", "capa", "psync2"]
+[replication-14] Received ["REPLCONF", "capa", "psync2"]
+[replication-14] master: Sent "OK"
+[replication-14] master: Sent bytes: "+OK\r\n"
+[replication-14] master: Received bytes: "*3\r\n$5\r\nPSYNC\r\n$1\r\n?\r\n$2\r\n-1\r\n"
+[replication-14] master: Received RESP value: ["PSYNC", "?", "-1"]
+[replication-14] Received ["PSYNC", "?", "-1"]
+[your_program] replica 6380 of localhost:6379: 2024/04/11 12:12:02 replof.go:63: Stage 4: PSYNC
+[replication-14] master: Sent "FULLRESYNC 75cd7bc10c49047e0d163660f3b90625b1af31dc 0"
+[replication-14] master: Sent bytes: "+FULLRESYNC 75cd7bc10c49047e0d163660f3b90625b1af31dc 0\r\n"
+[replication-14] Sending RDB file...
+[replication-14] master: Sent bytes: "$88\r\nREDIS0011\xfa\tredis-ver\x057.2.0\xfa\nredis-bits\xc0@\xfa\x05ctime\xc2m\b\xbce\xfa\bused-mem°\xc4\x10\x00\xfa\baof-base\xc0\x00\xff\xf0n;\xfe\xc0\xffZ\xa2"
+[replication-14] Sent RDB file.
+[replication-14] master: $ redis-cli REPLCONF GETACK *
+[replication-14] master: Sent bytes: "*3\r\n$8\r\nREPLCONF\r\n$6\r\nGETACK\r\n$1\r\n*\r\n"
+[your_program] replica 6380 of localhost:6379: 2024/04/11 12:12:02 replof.go:145: Got PSYNC response: {FULLRESYNC 75cd7bc10c49047e0d163660f3b90625b1af31dc 0}
+[your_program] replica 6380 of localhost:6379: 2024/04/11 12:12:02 replof.go:67: Stage 5: Reading RDB
+[your_program] RDB 2024/04/11 12:12:02 Got rdb with length 88
+[your_program] RDB 2024/04/11 12:12:02 Read magic string
+[your_program] RDB 2024/04/11 12:12:02 RDB version: 0011
+[your_program] RDB 2024/04/11 12:12:02 Reading DB metadata
+[your_program] RDB 2024/04/11 12:12:02 Done parsing RDB file in 21540
+[your_program] replica 6380 of localhost:6379: 2024/04/11 12:12:02 replof.go:83: Got RDB
+[your_program] replica 6380 of localhost:6379: 2024/04/11 12:12:02 replof.go:72: Stage 6: Listening for propagation
+[your_program] replica12:12:02.460482 redis.go:116: Listeing on port 6380
+[your_program] replica 6380 of localhost:6379: 2024/04/11 12:12:02 replof.go:150: Listening for propagation from [::1]:6379
+[your_program] replica 6380 of localhost:6379: 2024/04/11 12:12:02 replof.go:159: Error reading request from master: expected *, got 

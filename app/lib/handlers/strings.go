@@ -12,14 +12,6 @@ import (
 	"time"
 )
 
-type StringsSetHandler struct {
-	Storage *storage.StringsStorage
-}
-
-type StringsGetHandler struct {
-	Storage *storage.StringsStorage
-}
-
 type SetArgs struct {
 	Key    string
 	Value  string
@@ -101,7 +93,6 @@ func parseSetArgs(args *[]resp.Marshaller) (*SetArgs, error) {
 					return nil, errors.New("ERR invalid expire time")
 				}
 			case "PX", "px":
-				fmt.Println("GOT NPX RIGHT HERE GOD DAM")
 				if i+1 >= len(*args) {
 					return nil, errors.New("ERR wrong number of arguments")
 				}
@@ -157,55 +148,71 @@ func parseSetArgs(args *[]resp.Marshaller) (*SetArgs, error) {
 	return &setArgs, nil
 }
 
-func (sh StringsSetHandler) HandleResp(ctx context.Context, req *lib.RESPRequest) (interface{}, error) {
+func HandleSet(ctx context.Context, req *lib.RESPRequest) (interface{}, error) {
 	setArgs, err := parseSetArgs(&req.Args.A)
 	if err != nil {
 		return nil, err
 	}
-	if setArgs.NX {
-		if _, ok := sh.Storage.Get(setArgs.Key); ok {
-			return nil, nil
-		}
 
+	strStore := req.Db.GetStorage(storage.STRINGS).(storage.StringsStorage)
+	if setArgs.NX {
+		// set only if [N]ot e[X]ists
+		if _, ok, err := strStore.Get(setArgs.Key); ok || err != nil {
+			return nil, err
+		}
 	}
 
 	if setArgs.XX {
-		if _, ok := sh.Storage.Get(setArgs.Key); !ok {
-			return nil, nil
+		// set only if [e]xists
+		if _, ok, err := strStore.Get(setArgs.Key); !ok || err != nil {
+			return nil, err
 		}
 	}
 
+	//return previous value
 	if setArgs.GET {
-		oldValue, _ := sh.Storage.Get(setArgs.Key)
-		sh.Storage.Set(setArgs.Key, setArgs.Value, setArgs.Expire)
+		oldValue, _, err := strStore.Get(setArgs.Key)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := strStore.Set(setArgs.Key, setArgs.Value, setArgs.Expire); err != nil {
+			return nil, err
+		}
+
 		return oldValue, err
 	}
 
-	sh.Storage.Set(setArgs.Key, setArgs.Value, setArgs.Expire)
+	if err := strStore.Set(setArgs.Key, setArgs.Value, setArgs.Expire); err != nil {
+		return nil, err
+	}
+
 	return "OK", err
 }
 
-func (sh StringsGetHandler) HandleResp(ctx context.Context, req *lib.RESPRequest) (interface{}, error) {
+func HandleGet(ctx context.Context, req *lib.RESPRequest) (interface{}, error) {
 	if len(req.Args.A) != 1 {
 		return nil, fmt.Errorf("ERR wrong number of arguments")
 	}
+
 	key, ok := req.Args.A[0].(resp.BulkString)
 	if !ok {
 		return nil, fmt.Errorf("ERR invalid key type, expected string, got %T", req.Args.A[0])
 	}
-	value, ok := sh.Storage.Get(string(key.S))
-	req.Logger.Printf("GETTING VALUE: %s\n", value)
+
+	db := req.Db.GetStorage(storage.STRINGS).(storage.StringsStorage)
+	value, ok, err := db.Get(string(key.S))
+	if err != nil {
+		return nil, err
+	}
 	if !ok {
 		return resp.BulkString{S: nil, EncodeNil: true}, nil
 	}
+
 	return []byte(value), nil
 }
 
-type KeysHandler struct {
-	Storage *storage.StringsStorage
-}
-
-func (c KeysHandler) HandleResp(ctx context.Context, req *lib.RESPRequest) (interface{}, error) {
+func HandleKeys(ctx context.Context, req *lib.RESPRequest) (interface{}, error) {
 	if len(req.Args.A) != 1 {
 		return nil, fmt.Errorf("ERR wrong number of arguments")
 	}
@@ -216,7 +223,7 @@ func (c KeysHandler) HandleResp(ctx context.Context, req *lib.RESPRequest) (inte
 	}
 
 	reg := regexp.MustCompile(".*")
-	keys := c.Storage.Keys(reg)
+	keys := req.Db.GetStorage(storage.STRINGS).(storage.StringsStorage).Keys(reg)
 	array := make([]resp.Marshaller, 0, len(keys))
 	for _, key := range keys {
 		array = append(array, resp.BulkString{S: []byte(key)})

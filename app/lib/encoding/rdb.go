@@ -11,6 +11,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -24,18 +25,21 @@ var (
 	EXPIRETIME     = byte(0xfd)
 	DB             = byte(0xfe)
 	EOF            = byte(0xff)
+	STRING         = byte(0x00)
+	STREAM         = byte(0x15)
 )
 
 type Rdb struct {
 	logger   *log.Logger
-	keys     map[string]*storage.StringsStorage
+	db       *sync.Map
 	version  []byte
 	metadata map[string]string
 }
 
-func NewRdb() *Rdb {
+func NewRdb(db *sync.Map) *Rdb {
 	logger := log.New(os.Stdout, "RDB ", log.LstdFlags)
 	return &Rdb{
+		db:       db,
 		metadata: make(map[string]string),
 		logger:   logger,
 		version:  make([]byte, 4),
@@ -46,6 +50,7 @@ func (rdb *Rdb) UnmarshalRESP(r *bufio.Reader) error {
 	if err := peekAndAssert(r, []byte("$")); err != nil {
 		return err
 	}
+
 	if _, err := r.Discard(len([]byte("$"))); err != nil {
 		return err
 	}
@@ -54,6 +59,7 @@ func (rdb *Rdb) UnmarshalRESP(r *bufio.Reader) error {
 	if err != nil {
 		return err
 	}
+
 	length, err := strconv.ParseInt(string(str[:len(str)-1]), 10, 64)
 	if err != nil {
 		return err
@@ -63,49 +69,40 @@ func (rdb *Rdb) UnmarshalRESP(r *bufio.Reader) error {
 		return err
 	}
 
-	buff := make([]byte, length, length+1)
-	_, err = r.Read(buff)
-	if err != nil {
+	rdb.logger.Printf("Got rdb with length %d", length)
+	if err = rdb.Load(r); err != nil {
 		return err
 	}
 
-	rdb.logger.Printf("Unmarshalling RDB: %s", buff)
-	if _, err = rdb.Load(bufio.NewReader(bytes.NewBuffer(buff))); err != nil {
-		return err
-	}
 	return nil
 }
 
-func (rd *Rdb) Apply(storage *storage.StringsStorage) {
-	for _, keys := range rd.keys {
-		storage.Cp(keys)
-	}
-}
-
-func (rd *Rdb) Load(r *bufio.Reader) (N int, err error) {
-	var (
-		n     int
-		start = time.Now()
-	)
-
-	N, _ = r.Discard(len(MAGICSTRING))
-	if n, err = r.Read(rd.version); err != nil {
-		return n, err
+func (rd *Rdb) Load(r *bufio.Reader) error {
+	start := time.Now()
+	magicString := make([]byte, len(MAGICSTRING))
+	_, err := r.Read(magicString)
+	if err != nil {
+		err = fmt.Errorf("error reading magic string %w", err)
+		return nil
 	}
 
-	N += n
+	if !bytes.Equal(magicString, MAGICSTRING) {
+		return fmt.Errorf("error reading magic string %s", MAGICSTRING)
+	}
+
+	rd.logger.Println("Read magic string")
+	if _, err = r.Read(rd.version); err != nil {
+		return err
+	}
+
 	rd.logger.Printf("RDB version: %s", rd.version)
 	if err = peekAndAssert(r, []byte{METADATA}); err != nil {
-		return
+		return err
 	}
 
 	metadata, err := r.ReadSlice(DB)
-	if err := r.UnreadByte(); err != nil {
-		return N, err
-	}
-
-	if err != nil {
-		return
+	if err = r.UnreadByte(); err != nil {
+		return err
 	}
 
 	mReader := bufio.NewReader(bytes.NewBuffer(metadata[:len(metadata)-1]))
@@ -114,48 +111,57 @@ func (rd *Rdb) Load(r *bufio.Reader) (N int, err error) {
 		key, err := DecodeString(mReader)
 		if err != nil {
 			rd.logger.Printf("Error decoding metadata key: %s", err)
-			return N, err
+			return err
 		}
 
 		value, err := DecodeString(mReader)
 		if err != nil {
-			return N, err
+			return err
 		}
 
 		rd.metadata[key] = value
 	}
 
-	if err = rd.readDb(r); err != nil {
-		return
+	if err := rd.readDb(r); err != nil {
+		return nil
 	}
 
-	rd.logger.Printf("Done parsing RDB file in %s, DBs: %d", time.Since(start), len(rd.keys))
-	return
+	r.Discard(1)
+	checksum := make([]byte, 2)
+	if _, err := r.Read(checksum); err != nil {
+		return err
+	}
+
+	rd.logger.Printf("Done parsing RDB in %s", time.Since(start))
+	return nil
 }
 
 func (rd *Rdb) readDb(r *bufio.Reader) error {
-	for db, resize, expire, err := rd.assertAndReadDbMetadata(r); err == nil; db, resize, expire, err = rd.assertAndReadDbMetadata(r) {
-		rd.logger.Printf("Reading DB: %d", db)
-		rd.keys = make(map[string]*storage.StringsStorage)
-		if err = rd.readDbKeys(r, db, resize, expire); err != nil {
+	for idx, _, _, err := rd.assertAndReadDbMetadata(r); err == nil; idx, _, _, err = rd.assertAndReadDbMetadata(r) {
+		// Note redis db index max is 2^4 - 1
+		dbAny, _ := rd.db.LoadOrStore(int(idx), storage.NewDb(int(idx)))
+		db, ok := dbAny.(*storage.RedisDataTypes)
+		if !ok {
+			return fmt.Errorf("failed to assert type of db with index %d", idx)
+		}
+
+		if err = rd.readDbKeys(r, db); err != nil {
 			return err
 		}
+
 	}
 
 	return nil
 }
 
-func (rd *Rdb) readDbKeys(r *bufio.Reader, db byte, resize, expire uint32) error {
-	if rd.keys[string(db)] == nil {
-		rd.keys[string(db)] = storage.New(nil)
-	}
-
+func (rd *Rdb) readDbKeys(r *bufio.Reader, db *storage.RedisDataTypes) error {
 	for {
 		b, err := r.Peek(1)
 		if err != nil {
 			return err
 		}
 
+		vType := b[0]
 		r.Discard(1)
 		expireTime := time.Time{}
 		switch b[0] {
@@ -166,8 +172,8 @@ func (rd *Rdb) readDbKeys(r *bufio.Reader, db byte, resize, expire uint32) error
 			if _, err = r.Read(kvExpire); err != nil {
 				return err
 			}
-			// discard value type
-			r.Discard(1)
+
+			vType, _ = r.ReadByte()
 
 			expireTime = time.Unix(int64(binary.LittleEndian.Uint32(kvExpire)), 0)
 		case EXPIRETIMEMS:
@@ -176,9 +182,7 @@ func (rd *Rdb) readDbKeys(r *bufio.Reader, db byte, resize, expire uint32) error
 				return err
 			}
 
-			// discard value type
-			r.Discard(1)
-
+			vType, _ = r.ReadByte()
 			expireTime = time.UnixMilli(int64(binary.LittleEndian.Uint64(kvExpire)))
 		}
 
@@ -192,20 +196,25 @@ func (rd *Rdb) readDbKeys(r *bufio.Reader, db byte, resize, expire uint32) error
 			return err
 		}
 
-		rd.logger.Printf("DB: %d, Key: %s, Value: %s, Exp: %s", db, key, value, expireTime)
-		rd.keys[string(db)].Set(key, value, expireTime)
+		// Note: if extend new types decompose into type ValueType with parse method
+		switch vType {
+		case STRING:
+			db.GetStorage(storage.STRINGS).(storage.StringsStorage).Set(key, value, expireTime)
+		default:
+			rd.logger.Printf("skipping unknown type: %d", vType)
+		}
 
 	}
 }
 
-func (rd *Rdb) assertAndReadDbMetadata(r *bufio.Reader) (db byte, resize uint32, expire uint32, err error) {
+func (rd *Rdb) assertAndReadDbMetadata(r *bufio.Reader) (idx byte, resize uint32, expire uint32, err error) {
 	if err = peekAndAssert(r, []byte{DB}); err != nil {
 		return
 	}
 
 	r.Discard(1)
 	rd.logger.Printf("Reading DB metadata\n")
-	db, err = r.ReadByte()
+	idx, err = r.ReadByte()
 	if err != nil {
 		return
 	}

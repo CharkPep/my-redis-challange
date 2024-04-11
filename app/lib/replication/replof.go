@@ -1,4 +1,4 @@
-package repl
+package replication
 
 import (
 	"bufio"
@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -16,6 +17,7 @@ type ReplicaOf struct {
 	r           *bufio.Reader
 	conn        net.Conn
 	propagation chan<- *REPLRequest
+	db          *sync.Map
 }
 
 type REPLRequest struct {
@@ -31,7 +33,7 @@ func (r *ReplicaOf) GetAddr() net.Addr {
 }
 
 // NewReplicaOf create replica of host by making a handshake sending listening port - port
-func NewReplicaOf(host, port string, propagation chan<- *REPLRequest) (*ReplicaOf, error) {
+func NewReplicaOf(db *sync.Map, host, port string, propagation chan<- *REPLRequest) (*ReplicaOf, error) {
 	conn, err := net.DialTimeout("tcp", host, time.Second*10)
 	if err != nil {
 		return nil, err
@@ -42,6 +44,7 @@ func NewReplicaOf(host, port string, propagation chan<- *REPLRequest) (*ReplicaO
 		logger:      logger,
 		conn:        conn,
 		r:           bufio.NewReader(conn),
+		db:          db,
 		propagation: propagation,
 	}
 
@@ -66,17 +69,18 @@ func NewReplicaOf(host, port string, propagation chan<- *REPLRequest) (*ReplicaO
 		logger.Printf("Error reading RDB: %s", err)
 		return nil, err
 	}
+
 	logger.Printf("Stage 6: Listening for propagation")
 	go repl.ListenAndAccept()
 	return repl, nil
 }
 
 func (r *ReplicaOf) ReadRDB() (*resp.Rdb, error) {
-	rdb := resp.NewRdb()
+	rdb := resp.NewRdb(r.db)
 	if err := rdb.UnmarshalRESP(r.r); err != nil {
 		return nil, err
 	}
-	r.logger.Println("Got RDB")
+
 	return rdb, nil
 }
 
@@ -156,8 +160,7 @@ func (r *ReplicaOf) ListenAndAccept() error {
 			continue
 		}
 
-		r.logger.Printf("Read %d bytes from %s", n, r.conn.RemoteAddr())
-
+		r.logger.Printf("read %d, with %s bytes from %s", n, args, r.conn.RemoteAddr())
 		if err == io.EOF {
 			r.logger.Printf("Connection closed by %s", r.conn.RemoteAddr())
 			return nil

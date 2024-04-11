@@ -400,7 +400,7 @@ func TestSimplePrimitivesInAnyResp_UnmarshalRESP(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		var s AnyResp
+		var s Any
 		r := bufio.NewReader(bytes.NewReader(test.input))
 		n, err := s.UnmarshalRESP(r)
 		if err != nil {
@@ -417,28 +417,28 @@ func TestSimplePrimitivesInAnyResp_UnmarshalRESP(t *testing.T) {
 
 func TestAnyResp_MarshalRESP(t *testing.T) {
 	type test struct {
-		input    AnyResp
+		input    Any
 		expected string
 	}
 	tests := []test{
 		{
-			input:    AnyResp{"simple", false},
+			input:    Any{"simple", false},
 			expected: "+simple\r\n",
 		},
 		{
-			input:    AnyResp{"", false},
+			input:    Any{"", false},
 			expected: "+\r\n",
 		},
 		{
-			input:    AnyResp{errors.New("RESP error"), false},
+			input:    Any{errors.New("RESP error"), false},
 			expected: "-RESP error\r\n",
 		},
 		{
-			input:    AnyResp{nil, true},
+			input:    Any{nil, true},
 			expected: "$-1\r\n",
 		},
 		{
-			input:    AnyResp{[]byte("hello"), true},
+			input:    Any{[]byte("hello"), true},
 			expected: "$5\r\nhello\r\n",
 		},
 	}
@@ -458,7 +458,7 @@ func TestAnyResp_MarshalRESP(t *testing.T) {
 	}
 }
 
-func AssertAny(a AnyResp, b Marshaller) bool {
+func AssertAny(a Any, b Marshaller) bool {
 	if reflect.DeepEqual(a.I, b) {
 		return true
 	}
@@ -482,7 +482,7 @@ func TestAnyResp_MarshalRESP2(t *testing.T) {
 	}
 	for _, test := range tests {
 		var b bytes.Buffer
-		n, err := AnyResp{I: test.i}.MarshalRESP(&b)
+		n, err := Any{I: test.i}.MarshalRESP(&b)
 		if err != nil {
 			t.Errorf("unexpected error: %s", err)
 		}
@@ -498,28 +498,28 @@ func TestAnyResp_MarshalRESP2(t *testing.T) {
 func TestAnyResp_UnmarshalRESPAndMarshalRESP(t *testing.T) {
 	type tests struct {
 		input  []byte
-		output AnyResp
+		output Any
 	}
 	testCases := []tests{
 		{
 			input:  []byte("+hello\r\n"),
-			output: AnyResp{SimpleString{"hello"}, false},
+			output: Any{SimpleString{"hello"}, false},
 		},
 		{
 			input:  []byte("-error\r\n"),
-			output: AnyResp{SimpleError{"error"}, false},
+			output: Any{SimpleError{"error"}, false},
 		},
 		{
 			input:  []byte(":123\r\n"),
-			output: AnyResp{SimpleInt{123}, false},
+			output: Any{SimpleInt{123}, false},
 		},
 		{
 			input:  []byte("$5\r\nhello\r\n"),
-			output: AnyResp{BulkString{[]byte("hello"), false}, false},
+			output: Any{BulkString{[]byte("hello"), false}, false},
 		},
 		{
 			input: []byte("*3\r\n$3\r\nfoo\r\n+bar\r\n:-1\r\n"),
-			output: AnyResp{Array{
+			output: Any{Array{
 				A: []Marshaller{
 					BulkString{[]byte("foo"), false},
 					SimpleString{"bar"},
@@ -531,7 +531,7 @@ func TestAnyResp_UnmarshalRESPAndMarshalRESP(t *testing.T) {
 	// Little bit brainfuck, basically what we want to do is check whether
 	// Marshaling and Unmarshaling gives the same data
 	for _, test := range testCases {
-		var marshaled AnyResp
+		var marshaled Any
 		marshaled.I = test.output.I
 		buff := bytes.NewBuffer([]byte{})
 		n, err := marshaled.MarshalRESP(buff)
@@ -550,6 +550,7 @@ func TestAnyResp_UnmarshalRESPAndMarshalRESP(t *testing.T) {
 		if !ok {
 			t.Errorf("unexpected error: %s", err)
 		}
+
 		r := bufio.NewReader(bytes.NewReader(test.input))
 		n, err = unmarshaled.UnmarshalRESP(r)
 		if err != nil {
@@ -562,7 +563,7 @@ func TestAnyResp_UnmarshalRESPAndMarshalRESP(t *testing.T) {
 		if n != len(test.input) {
 			t.Errorf("expected %d, got %d", n, len(test.input))
 		}
-		if AssertAny(val.Interface().(AnyResp), test.output) {
+		if AssertAny(val.Interface().(Any), test.output) {
 			t.Errorf("i %v, got %q", test.output, val)
 		}
 

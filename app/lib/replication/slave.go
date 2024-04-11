@@ -1,4 +1,4 @@
-package repl
+package replication
 
 import (
 	"bufio"
@@ -33,7 +33,7 @@ func (r *Slave) GetOffset() uint64 {
 func NewReplica(conn net.Conn, i string) *Slave {
 	return &Slave{
 		conn:   conn,
-		logger: log.New(os.Stdout, fmt.Sprintf("slave %s: ", i), log.Lmicroseconds|log.Lshortfile),
+		logger: log.New(os.Stdout, fmt.Sprintf("replication %s: ", i), log.Lmicroseconds|log.Lshortfile),
 		mu:     sync.Mutex{},
 		r:      bufio.NewReader(conn),
 	}
