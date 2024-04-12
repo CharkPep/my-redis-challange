@@ -29,7 +29,6 @@ func HandleXAdd(ctx context.Context, req *lib.RESPRequest) (interface{}, error) 
 	}
 
 	kVals := make(map[string]string)
-
 	for i := 2; i < len(req.Args.A); i += 2 {
 		field, ok := req.Args.A[i].(resp.BulkString)
 		if !ok {
@@ -48,6 +47,9 @@ func HandleXAdd(ctx context.Context, req *lib.RESPRequest) (interface{}, error) 
 		kVals[field.String()] = value.String()
 	}
 
-	s.Add(key.String(), kVals)
+	if _, _, err := s.Add(key.String(), kVals); err != nil {
+		return nil, err
+	}
+
 	return key, nil
 }

@@ -348,11 +348,41 @@ func TestHandleStreamXAdd(t *testing.T) {
 			c: resp.Array{A: []resp.Marshaller{
 				resp.BulkString{S: []byte("XADD")},
 				resp.BulkString{S: []byte("stream")},
-				resp.BulkString{S: []byte("0-1")},
+				resp.BulkString{S: []byte("1-1")},
 				resp.BulkString{S: []byte("filed")},
 				resp.BulkString{S: []byte("value")},
 			}},
-			e: resp.Any{I: resp.BulkString{S: []byte("0-1")}},
+			e: resp.Any{I: resp.BulkString{S: []byte("1-1")}},
+		},
+		{
+			c: resp.Array{A: []resp.Marshaller{
+				resp.BulkString{S: []byte("XADD")},
+				resp.BulkString{S: []byte("stream")},
+				resp.BulkString{S: []byte("1-2")},
+				resp.BulkString{S: []byte("filed")},
+				resp.BulkString{S: []byte("value")},
+			}},
+			e: resp.Any{I: resp.BulkString{S: []byte("1-2")}},
+		},
+		{
+			c: resp.Array{A: []resp.Marshaller{
+				resp.BulkString{S: []byte("XADD")},
+				resp.BulkString{S: []byte("stream")},
+				resp.BulkString{S: []byte("1-2")},
+				resp.BulkString{S: []byte("filed")},
+				resp.BulkString{S: []byte("value")},
+			}},
+			e: resp.Any{I: resp.SimpleError{E: "ERR The ID specified in XADD is equal or smaller than the target stream top item"}},
+		},
+		{
+			c: resp.Array{A: []resp.Marshaller{
+				resp.BulkString{S: []byte("XADD")},
+				resp.BulkString{S: []byte("stream")},
+				resp.BulkString{S: []byte("0-0")},
+				resp.BulkString{S: []byte("filed")},
+				resp.BulkString{S: []byte("value")},
+			}},
+			e: resp.Any{I: resp.SimpleError{E: "ERR The ID specified in XADD must be greater than 0-0"}},
 		},
 	}
 	_, router := SetupMaster(t, MASTER_PORT)
@@ -364,9 +394,9 @@ func TestHandleStreamXAdd(t *testing.T) {
 			if err != nil {
 				t.Error(err)
 			}
+
 			defer client.Close()
 			r := bufio.NewReader(client)
-
 			if _, err := test.c.MarshalRESP(client); err != nil {
 				t.Error(err)
 			}

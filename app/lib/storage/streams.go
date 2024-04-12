@@ -26,3 +26,11 @@ func (st StreamDataType) GetType() DataType {
 func (st StreamDataType) Add(key string, data interface{}) (old interface{}, ok bool) {
 	return st.tree.Insert(key, data)
 }
+
+func (st StreamDataType) Min() (key string, val interface{}, ok bool) {
+	return st.tree.Minimum()
+}
+
+func (st StreamDataType) Max() (key string, val interface{}, ok bool) {
+	return st.tree.Maximum()
+}
