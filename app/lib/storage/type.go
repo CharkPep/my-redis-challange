@@ -5,31 +5,31 @@ import (
 	"sync"
 )
 
-type StorageType int
+type DataType int
 
-func (st StorageType) String() string {
+func (st DataType) String() string {
 	return [...]string{"none", "string", "stream"}[st]
 }
 
 const (
-	NONE StorageType = iota
+	NONE DataType = iota
 	STRINGS
 	STREAMS
 )
 
 type keyTypeMap struct {
 	mu    *sync.RWMutex
-	kType map[string]StorageType
+	kType map[string]DataType
 }
 
 func newKeyType() *keyTypeMap {
 	return &keyTypeMap{
 		mu:    &sync.RWMutex{},
-		kType: make(map[string]StorageType),
+		kType: make(map[string]DataType),
 	}
 }
 
-func (kt keyTypeMap) AssertKeyTypeOrNone(key string, t StorageType) (found bool, err error) {
+func (kt keyTypeMap) AssertKeyTypeOrNone(key string, t DataType) (found bool, err error) {
 	tKey := kt.GetType(key)
 	if tKey == NONE {
 		return false, nil
@@ -42,7 +42,7 @@ func (kt keyTypeMap) AssertKeyTypeOrNone(key string, t StorageType) (found bool,
 	return true, nil
 }
 
-func (kt keyTypeMap) GetType(key string) StorageType {
+func (kt keyTypeMap) GetType(key string) DataType {
 	kt.mu.RLock()
 	defer kt.mu.RUnlock()
 	tKey, ok := kt.kType[key]
@@ -53,7 +53,7 @@ func (kt keyTypeMap) GetType(key string) StorageType {
 	return tKey
 }
 
-func (kt keyTypeMap) SetType(key string, t StorageType) {
+func (kt keyTypeMap) SetType(key string, t DataType) {
 	kt.mu.Lock()
 	defer kt.mu.Unlock()
 	kt.kType[key] = t

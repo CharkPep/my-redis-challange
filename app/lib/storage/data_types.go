@@ -3,10 +3,10 @@ package storage
 // problem with redis implementation of db that each key has associated type
 // (each key has to include type information to prevent from two keys with different types to collide in one db idx)
 // there is not much of what we can do but something like this
-// data types storage
+// data types stream
 // t[k] -> data type
-// s[k] -> data type storage
-// data type storage
+// s[k] -> data type stream
+// data type stream
 // d[k] -> v
 // problems
 // (1) value expiry, sync value between concrete data type db and global types db - solution proxy each request
@@ -14,13 +14,13 @@ package storage
 // (3) lots of mutexes
 
 type TypedStorage interface {
-	GetType() StorageType
+	GetType() DataType
 }
 
 type RedisDataTypes struct {
 	index     int
 	keyTypes  *keyTypeMap
-	dataTypes map[StorageType]TypedStorage
+	dataTypes map[DataType]TypedStorage
 }
 
 func NewDb(idx int) *RedisDataTypes {
@@ -28,8 +28,8 @@ func NewDb(idx int) *RedisDataTypes {
 	return &RedisDataTypes{
 		index:    idx,
 		keyTypes: kType,
-		dataTypes: map[StorageType]TypedStorage{
-			STREAMS: NewStreamStorage(),
+		dataTypes: map[DataType]TypedStorage{
+			STREAMS: NewStreamIdx(kType),
 			STRINGS: &StringsProxy{
 				keyTypes: kType,
 				storage:  NewStringsStorage(),
@@ -38,10 +38,10 @@ func NewDb(idx int) *RedisDataTypes {
 	}
 }
 
-func (db RedisDataTypes) GetType(key string) StorageType {
+func (db RedisDataTypes) GetType(key string) DataType {
 	return db.keyTypes.GetType(key)
 }
 
-func (db RedisDataTypes) GetStorage(t StorageType) TypedStorage {
+func (db RedisDataTypes) GetStorage(t DataType) TypedStorage {
 	return db.dataTypes[t]
 }

@@ -54,6 +54,6 @@ func (s *StringsProxy) Keys(pattern *regexp.Regexp) []string {
 	return s.storage.Keys(pattern)
 }
 
-func (s *StringsProxy) GetType() StorageType {
+func (s *StringsProxy) GetType() DataType {
 	return s.storage.GetType()
 }

@@ -335,3 +335,51 @@ func TestShouldReturnType(t *testing.T) {
 		})
 	}
 }
+
+func TestHandleStreamXAdd(t *testing.T) {
+	type tt struct {
+		c   resp.Array
+		e   resp.Any
+		now bool
+	}
+
+	ts := []tt{
+		{
+			c: resp.Array{A: []resp.Marshaller{
+				resp.BulkString{S: []byte("XADD")},
+				resp.BulkString{S: []byte("stream")},
+				resp.BulkString{S: []byte("0-1")},
+				resp.BulkString{S: []byte("filed")},
+				resp.BulkString{S: []byte("value")},
+			}},
+			e: resp.Any{I: resp.BulkString{S: []byte("0-1")}},
+		},
+	}
+	_, router := SetupMaster(t, MASTER_PORT)
+	router.RegisterHandlerFunc("xadd", handlers.HandleXAdd)
+	for i, test := range ts {
+		test := test
+		t.Run(fmt.Sprintf("xadd-%d", i), func(t *testing.T) {
+			client, err := net.DialTimeout("tcp", fmt.Sprintf(":%d", MASTER_PORT), time.Second)
+			if err != nil {
+				t.Error(err)
+			}
+			defer client.Close()
+			r := bufio.NewReader(client)
+
+			if _, err := test.c.MarshalRESP(client); err != nil {
+				t.Error(err)
+			}
+
+			res := resp.Any{}
+			if _, err := res.UnmarshalRESP(r); err != nil {
+				t.Error(err)
+			}
+
+			if !reflect.DeepEqual(res.I, test.e.I) {
+				t.Errorf("expected %s, got %s", test.e.I, res.I)
+			}
+		})
+	}
+
+}

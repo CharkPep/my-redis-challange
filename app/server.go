@@ -14,8 +14,9 @@ Usage: <build> [options]
 --port <port>			Port to listen on
 --help				Show this help message	
 --replicaof <host> <port>	Make the server a replication of another instance
---dir <directory>	Set rdb directory
---dbfilename		Set rdb file name, combined with "dir" option sets path to rdb file
+--dir <directory>		Set rdb directory
+--dbfilename <name>		Set rdb file name, combined with "dir" option sets path to rdb file
+
 `
 
 func RegisterHandlers(router *lib.Router) {
@@ -31,6 +32,7 @@ func RegisterHandlers(router *lib.Router) {
 	router.RegisterHandlerFunc("config", lib.HandleConfig)
 	router.RegisterHandlerFunc("select", lib.HandleSelect)
 	router.RegisterHandlerFunc("type", handlers.HandleType)
+	router.RegisterHandlerFunc("xadd", handlers.HandleXAdd)
 }
 func main() {
 	log.SetPrefix("redis-server:")

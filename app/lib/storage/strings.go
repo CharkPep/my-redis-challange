@@ -103,7 +103,7 @@ func (s *StringsDataType) Keys(pattern *regexp.Regexp) []string {
 	return keys
 }
 
-func (s *StringsDataType) GetType() StorageType {
+func (s *StringsDataType) GetType() DataType {
 	return STRINGS
 }
 
