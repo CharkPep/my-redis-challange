@@ -348,7 +348,27 @@ func TestHandleStreamXAdd(t *testing.T) {
 			c: resp.Array{A: []resp.Marshaller{
 				resp.BulkString{S: []byte("XADD")},
 				resp.BulkString{S: []byte("stream")},
-				resp.BulkString{S: []byte("1-1")},
+				resp.BulkString{S: []byte("0-*")},
+				resp.BulkString{S: []byte("filed")},
+				resp.BulkString{S: []byte("value")},
+			}},
+			e: resp.Any{I: resp.BulkString{S: []byte("0-1")}},
+		},
+		{
+			c: resp.Array{A: []resp.Marshaller{
+				resp.BulkString{S: []byte("XADD")},
+				resp.BulkString{S: []byte("stream")},
+				resp.BulkString{S: []byte("1-*")},
+				resp.BulkString{S: []byte("filed")},
+				resp.BulkString{S: []byte("value")},
+			}},
+			e: resp.Any{I: resp.BulkString{S: []byte("1-0")}},
+		},
+		{
+			c: resp.Array{A: []resp.Marshaller{
+				resp.BulkString{S: []byte("XADD")},
+				resp.BulkString{S: []byte("stream")},
+				resp.BulkString{S: []byte("1-*")},
 				resp.BulkString{S: []byte("filed")},
 				resp.BulkString{S: []byte("value")},
 			}},
@@ -358,11 +378,21 @@ func TestHandleStreamXAdd(t *testing.T) {
 			c: resp.Array{A: []resp.Marshaller{
 				resp.BulkString{S: []byte("XADD")},
 				resp.BulkString{S: []byte("stream")},
-				resp.BulkString{S: []byte("1-2")},
+				resp.BulkString{S: []byte("2-1")},
 				resp.BulkString{S: []byte("filed")},
 				resp.BulkString{S: []byte("value")},
 			}},
-			e: resp.Any{I: resp.BulkString{S: []byte("1-2")}},
+			e: resp.Any{I: resp.BulkString{S: []byte("2-1")}},
+		},
+		{
+			c: resp.Array{A: []resp.Marshaller{
+				resp.BulkString{S: []byte("XADD")},
+				resp.BulkString{S: []byte("stream")},
+				resp.BulkString{S: []byte("2-*")},
+				resp.BulkString{S: []byte("filed")},
+				resp.BulkString{S: []byte("value")},
+			}},
+			e: resp.Any{I: resp.BulkString{S: []byte("2-2")}},
 		},
 		{
 			c: resp.Array{A: []resp.Marshaller{
@@ -392,22 +422,22 @@ func TestHandleStreamXAdd(t *testing.T) {
 		t.Run(fmt.Sprintf("xadd-%d", i), func(t *testing.T) {
 			client, err := net.DialTimeout("tcp", fmt.Sprintf(":%d", MASTER_PORT), time.Second)
 			if err != nil {
-				t.Error(err)
+				t.Fatal(err)
 			}
 
 			defer client.Close()
 			r := bufio.NewReader(client)
 			if _, err := test.c.MarshalRESP(client); err != nil {
-				t.Error(err)
+				t.Fatal(err)
 			}
 
 			res := resp.Any{}
 			if _, err := res.UnmarshalRESP(r); err != nil {
-				t.Error(err)
+				t.Fatal(err)
 			}
 
 			if !reflect.DeepEqual(res.I, test.e.I) {
-				t.Errorf("expected %s, got %s", test.e.I, res.I)
+				t.Fatalf("expected %s, got %s", test.e.I, res.I)
 			}
 		})
 	}

@@ -1,7 +1,10 @@
 package storage
 
 import (
+	"fmt"
 	"github.com/armon/go-radix"
+	"strings"
+	"sync"
 )
 
 type StreamDataType struct {
@@ -10,10 +13,12 @@ type StreamDataType struct {
 	// range queries(iteration from subtree to root to leafs that are located after current leaf) and blocking behavior,
 	// though I decided to use already implemented tree
 	tree *radix.Tree
+	mu   *sync.RWMutex
 }
 
 func NewStream(stream string) *StreamDataType {
 	return &StreamDataType{
+		mu:   &sync.RWMutex{},
 		name: stream,
 		tree: radix.New(),
 	}
@@ -24,13 +29,42 @@ func (st StreamDataType) GetType() DataType {
 }
 
 func (st StreamDataType) Add(key string, data interface{}) (old interface{}, ok bool) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
 	return st.tree.Insert(key, data)
 }
 
-func (st StreamDataType) Min() (key string, val interface{}, ok bool) {
-	return st.tree.Minimum()
+func (st StreamDataType) Min(prefix string) (key string, val interface{}, ok bool) {
+	st.mu.RLock()
+	defer st.mu.RUnlock()
+	// as any walk function does not provide api to chose edges from the edge list, has to walk the whole prefix,
+	st.tree.WalkPrefix(prefix, func(s string, v interface{}) bool {
+		ok = true
+		if strings.Compare(key, s) == -1 {
+			key = s
+			val = v
+		}
+		return false
+	})
+
+	return
 }
 
-func (st StreamDataType) Max() (key string, val interface{}, ok bool) {
-	return st.tree.Maximum()
+func (st StreamDataType) Max(prefix string) (key string, val interface{}, ok bool) {
+	st.mu.RLock()
+	defer st.mu.RUnlock()
+	// as any walk function does not provide api to chose edges from the edge list, has to walk the whole prefix
+	//key, val, ok = st.tree.LongestPrefix(prefix)
+	st.tree.WalkPrefix(prefix, func(s string, v interface{}) bool {
+		fmt.Printf("Walking prefix %s, current %s\n", key, s)
+		ok = true
+		if strings.Compare(fmt.Sprintf("%s-0", key), s) == -1 {
+			key = s
+			val = v
+		}
+
+		return false
+	})
+
+	return
 }

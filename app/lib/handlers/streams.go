@@ -47,9 +47,10 @@ func HandleXAdd(ctx context.Context, req *lib.RESPRequest) (interface{}, error) 
 		kVals[field.String()] = value.String()
 	}
 
-	if _, _, err := s.Add(key.String(), kVals); err != nil {
+	var k string
+	if _, k, _, err = s.Add(key.String(), kVals); err != nil {
 		return nil, err
 	}
 
-	return key, nil
+	return []byte(k), nil
 }

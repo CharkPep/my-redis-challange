@@ -39,6 +39,7 @@ func (si StreamsIdx) GetOrCreateStream(stream string) (*StreamProxy, error) {
 		defer si.mu.Unlock()
 		s = &StreamProxy{
 			stream: st,
+			mu:     &sync.RWMutex{},
 			kType:  si.kTypes,
 		}
 		si.streams[stream] = s
@@ -52,55 +53,92 @@ func (si StreamsIdx) GetType() DataType {
 }
 
 type StreamProxy struct {
+	mu     *sync.RWMutex
 	stream *StreamDataType
 	kType  *keyTypeMap
 }
 
-func parseStreamKey(key string) (int, int, error) {
-	k := strings.Split(key, "-")
-	if len(k) != 2 {
-		return 0, 0, fmt.Errorf("wrong argument format")
-	}
-
-	k1, err := strconv.ParseInt(k[0], 10, 64)
-	if err != nil {
-		return 0, 0, err
-	}
-	k2, err := strconv.ParseInt(k[1], 10, 64)
-	if err != nil {
-		return 0, 0, err
-	}
-
-	return int(k1), int(k2), err
+type StreamKey struct {
+	key int64
+	//	if generate true key should be ignored
+	generate bool
 }
 
-func (st StreamProxy) Add(key string, data interface{}) (old interface{}, ok bool, err error) {
-	mx, _, ok := st.stream.Max()
-	fmt.Println(mx, ok)
-	if ok {
-		mn1, mn2, err := parseStreamKey(mx)
-		if err != nil {
-			return nil, false, err
-		}
-		k1, k2, err := parseStreamKey(key)
-		if k1 <= 0 && k2 <= 0 {
-			return nil, false, fmt.Errorf("ERR The ID specified in XADD must be greater than 0-0")
-		}
-
-		if k1 < mn1 || k1 == mn1 && k2 <= mn2 {
-			return nil, false, fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
-		}
-
+func parseStreamKey(key string) (timestamp StreamKey, sequence StreamKey, err error) {
+	if key == "" {
+		return StreamKey{}, StreamKey{}, err
 	}
-	//if strings.Compare(key, mx) != 1 {
-	//	return nil, false, fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
-	//}
+	k := strings.Split(key, "-")
+	if len(k) != 2 {
+		return StreamKey{}, StreamKey{}, fmt.Errorf("wrong argument format")
+	}
 
-	//if strings.Compare(key, "0-0") == -1 {
-	//	return nil, false, fmt.Errorf("ERR The ID specified in XADD must be greater than 0-0")
-	//}
+	if k[0] == "*" {
+		timestamp.generate = true
+	} else {
+		timestamp.key, err = strconv.ParseInt(k[0], 10, 64)
+		if err != nil {
+			return StreamKey{}, StreamKey{}, err
+		}
+	}
+
+	if k[1] == "*" {
+		sequence.generate = true
+	} else {
+		sequence.key, err = strconv.ParseInt(k[1], 10, 64)
+		if err != nil {
+			return StreamKey{}, StreamKey{}, err
+		}
+
+		if timestamp.key <= 0 && sequence.key <= 0 {
+			return StreamKey{}, StreamKey{}, fmt.Errorf("ERR The ID specified in XADD must be greater than 0-0")
+		}
+	}
+
+	return
+}
+
+func (st StreamProxy) Add(k string, data interface{}) (old interface{}, key string, ok bool, err error) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	mx, _, ok := st.stream.Max("")
+	mxT, mxS, err := parseStreamKey(mx)
+	if err != nil {
+		return nil, k, false, err
+	}
+
+	timestamp, sequence, err := parseStreamKey(k)
+	if err != nil {
+		return nil, k, false, err
+	}
+
+	if sequence.generate {
+		fmt.Printf("Generating sequence number for %d-*\n", timestamp.key)
+		mxPrefix, _, _ := st.stream.Max(fmt.Sprintf("%d-", timestamp.key))
+		_, nSeq, err := parseStreamKey(mxPrefix)
+		if err != nil {
+			return nil, key, false, err
+		}
+
+		fmt.Printf("Longest prefix %s\n", mxPrefix)
+
+		if mxPrefix != "" {
+			sequence.key = nSeq.key + 1
+		}
+
+		// "0-*" case when tree is empty
+		if timestamp.key == 0 && nSeq.key == 0 {
+			sequence.key = 1
+		}
+	}
+
+	if timestamp.key < mxT.key || timestamp == mxT && sequence.key <= mxS.key {
+		return nil, k, false, fmt.Errorf("ERR The ID specified in XADD is equal or smaller than the target stream top item")
+	}
+
+	k = fmt.Sprintf("%d-%d", timestamp.key, sequence.key)
 
 	st.kType.SetType(st.stream.name, STREAMS)
-	old, ok = st.stream.Add(key, data)
-	return
+	old, ok = st.stream.Add(k, data)
+	return nil, k, false, nil
 }
