@@ -149,3 +149,16 @@ func SetupReplicaOf(t testing.TB, port int, masterAddr string) (*lib.RedisServer
 
 	return replica, router
 }
+
+func TryString(a *resp.Any) ([]byte, bool) {
+	switch v := a.I.(type) {
+	case resp.BulkString:
+		return v.S, true
+	case resp.SimpleString:
+		return []byte(v.S), true
+	case resp.SimpleError:
+		return []byte(v.E), true
+	}
+
+	return nil, false
+}

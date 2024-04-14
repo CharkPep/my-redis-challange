@@ -103,12 +103,14 @@ func (req *RESPRequest) Handle(router *Router) {
 
 		req.Logger.Printf("read %d bytes from %s", n, req.RemoteAddr)
 		if err != nil {
+			req.Logger.Printf("Reponde with error: %s", err)
 			resp.SimpleError{E: err.Error()}.MarshalRESP(req.W)
 			continue
 		}
 		req.Logger.Printf("Request: %s from %s", req.Args, req.RemoteAddr)
 		handler, err := router.ResolveRequest(req.Args)
 		if err != nil {
+			req.Logger.Printf("Reponde with error: %s", err)
 			resp.SimpleError{fmt.Sprintf("%s", err)}.MarshalRESP(req.W)
 			continue
 		}
@@ -116,6 +118,7 @@ func (req *RESPRequest) Handle(router *Router) {
 		req.Args.A = req.Args.A[1:]
 		res, err := handler.HandleResp(ctx, req)
 		if err != nil {
+			req.Logger.Printf("Reponde with error: %s", err)
 			resp.SimpleError{E: err.Error()}.MarshalRESP(req.W)
 			continue
 		}

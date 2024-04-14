@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type Stream interface {
@@ -68,18 +69,24 @@ func parseStreamKey(key string) (timestamp StreamKey, sequence StreamKey, err er
 	if key == "" {
 		return StreamKey{}, StreamKey{}, err
 	}
+
 	k := strings.Split(key, "-")
-	if len(k) != 2 {
+	if len(k) > 2 || len(k) == 1 && k[0] != "*" {
 		return StreamKey{}, StreamKey{}, fmt.Errorf("wrong argument format")
 	}
 
 	if k[0] == "*" {
 		timestamp.generate = true
-	} else {
-		timestamp.key, err = strconv.ParseInt(k[0], 10, 64)
-		if err != nil {
-			return StreamKey{}, StreamKey{}, err
-		}
+		return StreamKey{
+				generate: true,
+			}, StreamKey{
+				generate: true,
+			}, nil
+	}
+
+	timestamp.key, err = strconv.ParseInt(k[0], 10, 64)
+	if err != nil {
+		return StreamKey{}, StreamKey{}, err
 	}
 
 	if k[1] == "*" {
@@ -110,6 +117,10 @@ func (st StreamProxy) Add(k string, data interface{}) (old interface{}, key stri
 	timestamp, sequence, err := parseStreamKey(k)
 	if err != nil {
 		return nil, k, false, err
+	}
+
+	if timestamp.generate {
+		timestamp.key = time.Now().UnixMilli()
 	}
 
 	if sequence.generate {
