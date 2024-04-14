@@ -92,6 +92,12 @@ func (req *RESPRequest) Handle(router *Router) {
 
 	defer cancel()
 	defer loggerPool.Put(req.Logger)
+	defer func() {
+		if err := recover(); err != nil {
+			req.Logger.Printf("Reponde with error: %s", err)
+			resp.SimpleError{fmt.Sprintf("%s", err)}.MarshalRESP(req.W)
+		}
+	}()
 	for {
 		start = time.Now()
 		req.Logger.Printf("Reading request from %s", req.RemoteAddr)

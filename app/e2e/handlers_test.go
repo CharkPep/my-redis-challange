@@ -706,3 +706,106 @@ func TestHandleXRange(t *testing.T) {
 		})
 	}
 }
+
+func TestXReadHandler(t *testing.T) {
+	type tt struct {
+		c resp.Array
+		e resp.Any
+	}
+
+	ts := [][]tt{
+		{
+			{
+				c: resp.Array{
+					[]resp.Marshaller{
+						resp.BulkString{S: []byte("XADD")},
+						resp.BulkString{S: []byte("stream")},
+						resp.BulkString{S: []byte("0-1")},
+						resp.BulkString{S: []byte("f")},
+						resp.BulkString{S: []byte("v")},
+					},
+				},
+				e: resp.Any{I: resp.BulkString{S: []byte("0-1")}},
+			},
+			{
+				c: resp.Array{
+					[]resp.Marshaller{
+						resp.BulkString{S: []byte("XADD")},
+						resp.BulkString{S: []byte("stream")},
+						resp.BulkString{S: []byte("1-1")},
+						resp.BulkString{S: []byte("f")},
+						resp.BulkString{S: []byte("v")},
+					},
+				},
+				e: resp.Any{I: resp.BulkString{S: []byte("1-1")}},
+			},
+			{
+				c: resp.Array{
+					[]resp.Marshaller{
+						resp.BulkString{S: []byte("XREAD")},
+						resp.BulkString{S: []byte("streams")},
+						resp.BulkString{S: []byte("stream")},
+						resp.BulkString{S: []byte("0-1")},
+					},
+				},
+				e: resp.Any{
+					I: resp.Array{
+						[]resp.Marshaller{
+							resp.Array{
+								[]resp.Marshaller{
+									resp.BulkString{S: []byte("stream")},
+									resp.Array{
+										[]resp.Marshaller{
+											resp.Array{
+												[]resp.Marshaller{
+													resp.BulkString{S: []byte("1-1")},
+													resp.Array{
+														[]resp.Marshaller{
+															resp.BulkString{S: []byte("f")},
+															resp.BulkString{S: []byte("v")},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for i, test := range ts {
+		t.Run(fmt.Sprintf("XRANGE-%d", i), func(t *testing.T) {
+			_, router := SetupMaster(t, MASTER_PORT+i)
+			router.RegisterHandlerFunc("xadd", handlers.HandleXAdd)
+			router.RegisterHandlerFunc("xread", handlers.HandleXRead)
+			for _, c := range test {
+				client, err := net.DialTimeout("tcp", fmt.Sprintf(":%d", MASTER_PORT+i), time.Second)
+				if err != nil {
+					t.Error(err)
+				}
+
+				r := bufio.NewReader(client)
+				if _, err := c.c.MarshalRESP(client); err != nil {
+					t.Error(err)
+				}
+
+				//buff := make([]byte, 128)
+				//r.Read(buff)
+				//t.Logf("%q", buff)
+				res := resp.Any{}
+				if _, err := res.UnmarshalRESP(r); err != nil {
+					t.Error(err)
+				}
+
+				if !reflect.DeepEqual(res.I, c.e.I) {
+					t.Errorf("expted %q, got %q", c.e.I, res.I)
+				}
+			}
+		})
+	}
+}

@@ -77,7 +77,15 @@ func (st StreamDataType) Range(start, end string) []StreamKV {
 	var kv []StreamKV
 	st.mu.RLock()
 	defer st.mu.RUnlock()
+	if end == "" {
+		end, _ = st.Max("")
+	}
 
+	if strings.Compare(start, end) == 1 {
+		end = start
+	}
+
+	fmt.Printf("Start %s, end %s\n", start, end)
 	// very slow approach, though to optimize need to implement radix tree or fork and tweak, mb contribute to radix-go))
 	st.tree.Walk(func(s string, v interface{}) bool {
 		if strings.Compare(s, start) == 1 && strings.Compare(s, end) == -1 || strings.Compare(s, start) == 0 || strings.Compare(s, end) == 0 {

@@ -34,6 +34,7 @@ func RegisterHandlers(router *lib.Router) {
 	router.RegisterHandlerFunc("type", handlers.HandleType)
 	router.RegisterHandlerFunc("xadd", handlers.HandleXAdd)
 	router.RegisterHandlerFunc("xrange", handlers.HandleXRange)
+	router.RegisterHandlerFunc("xread", handlers.HandleXRead)
 
 }
 func main() {
