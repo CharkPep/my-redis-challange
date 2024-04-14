@@ -720,18 +720,18 @@ func TestXReadHandler(t *testing.T) {
 					[]resp.Marshaller{
 						resp.BulkString{S: []byte("XADD")},
 						resp.BulkString{S: []byte("stream")},
-						resp.BulkString{S: []byte("0-1")},
+						resp.BulkString{S: []byte("1-1")},
 						resp.BulkString{S: []byte("f")},
 						resp.BulkString{S: []byte("v")},
 					},
 				},
-				e: resp.Any{I: resp.BulkString{S: []byte("0-1")}},
+				e: resp.Any{I: resp.BulkString{S: []byte("1-1")}},
 			},
 			{
 				c: resp.Array{
 					[]resp.Marshaller{
 						resp.BulkString{S: []byte("XADD")},
-						resp.BulkString{S: []byte("stream")},
+						resp.BulkString{S: []byte("some_key")},
 						resp.BulkString{S: []byte("1-1")},
 						resp.BulkString{S: []byte("f")},
 						resp.BulkString{S: []byte("v")},
@@ -745,6 +745,8 @@ func TestXReadHandler(t *testing.T) {
 						resp.BulkString{S: []byte("XREAD")},
 						resp.BulkString{S: []byte("streams")},
 						resp.BulkString{S: []byte("stream")},
+						resp.BulkString{S: []byte("some_key")},
+						resp.BulkString{S: []byte("0-1")},
 						resp.BulkString{S: []byte("0-1")},
 					},
 				},
@@ -754,6 +756,26 @@ func TestXReadHandler(t *testing.T) {
 							resp.Array{
 								[]resp.Marshaller{
 									resp.BulkString{S: []byte("stream")},
+									resp.Array{
+										[]resp.Marshaller{
+											resp.Array{
+												[]resp.Marshaller{
+													resp.BulkString{S: []byte("1-1")},
+													resp.Array{
+														[]resp.Marshaller{
+															resp.BulkString{S: []byte("f")},
+															resp.BulkString{S: []byte("v")},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+							resp.Array{
+								[]resp.Marshaller{
+									resp.BulkString{S: []byte("some_key")},
 									resp.Array{
 										[]resp.Marshaller{
 											resp.Array{
