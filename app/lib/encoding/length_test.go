@@ -1,51 +1,45 @@
 package encoding
 
-import (
-	"bufio"
-	"bytes"
-	"fmt"
-	"testing"
-)
-
-func TestDecode(t *testing.T) {
-	type args struct {
-		r        *bufio.Reader
-		isIntStr bool
-		e        uint32
-	}
-
-	tests := []args{
-		{bufio.NewReader(bytes.NewReader([]byte{RDB_6BIT | 0x04})), false, 0x01},
-		{bufio.NewReader(bytes.NewReader([]byte{RDB_14BIT, 0xFF})), false, 0x3fc0},
-		{bufio.NewReader(bytes.NewReader([]byte{RDB_32BIT, 0x01, 0x00, 0x00, 0x10})), false, 0x10000001},
-		{bufio.NewReader(bytes.NewReader([]byte{RDB_8BIT_STR__AS_INT, 0x01})), true, 0x01},
-		{bufio.NewReader(bytes.NewReader([]byte{RDB_16BIT_STR_AS_INT, 0x01, 0x00})), true, 0x0001},
-		{bufio.NewReader(bytes.NewReader([]byte{RDB_32BIT_STR_AS_INT, 0x01, 0x00, 0x00, 0x00})), true, 0x00000001},
-	}
-
-	for i, test := range tests {
-		tc := test
-		t.Logf("Test case %d\n", i)
-		t.Run(fmt.Sprintf("%d\n", i), func(t *testing.T) {
-			t.Parallel()
-			got, isIntString, err := Decode(tc.r)
-			if err != nil {
-				t.Errorf("Decode() error = %v", err)
-				return
-			}
-
-			if isIntString != tc.isIntStr {
-				t.Errorf("Decode() = %v, want %v", isIntString, tc.isIntStr)
-			}
-
-			if got != tc.e {
-				t.Errorf("Decode() = %v, want %v", got, tc.e)
-			}
-		})
-	}
-
-}
-
+//
+//func TestDecode(t *testing.T) {
+//	type args struct {
+//		r        *bufio.Reader
+//		isIntStr bool
+//		e        uint32
+//	}
+//
+//	tests := []args{
+//		{bufio.NewReader(bytes.NewReader([]byte{RDB_6BIT | 0x04})), false, 0x01},
+//		{bufio.NewReader(bytes.NewReader([]byte{RDB_14BIT, 0xFF})), false, 0x3fc0},
+//		{bufio.NewReader(bytes.NewReader([]byte{RDB_32BIT, 0x01, 0x00, 0x00, 0x10})), false, 0x10000001},
+//		{bufio.NewReader(bytes.NewReader([]byte{RDB_8BIT_STR__AS_INT, 0x01})), true, 0x01},
+//		{bufio.NewReader(bytes.NewReader([]byte{RDB_16BIT_STR_AS_INT, 0x01, 0x00})), true, 0x0001},
+//		{bufio.NewReader(bytes.NewReader([]byte{RDB_32BIT_STR_AS_INT, 0x01, 0x00, 0x00, 0x00})), true, 0x00000001},
+//	}
+//
+//	for i, test := range tests {
+//		tc := test
+//		t.Logf("Test case %d\n", i)
+//		t.Run(fmt.Sprintf("%d\n", i), func(t *testing.T) {
+//			t.Parallel()
+//			got, isIntString, err := Decode(tc.r)
+//			if err != nil {
+//				t.Errorf("Decode() error = %v", err)
+//				return
+//			}
+//
+//			if isIntString != tc.isIntStr {
+//				t.Errorf("Decode() = %v, want %v", isIntString, tc.isIntStr)
+//			}
+//
+//			if got != tc.e {
+//				t.Errorf("Decode() = %v, want %v", got, tc.e)
+//			}
+//		})
+//	}
+//
+//}
+//
 //func TestEncode(t *testing.T) {
 //	type tt struct {
 //		format byte

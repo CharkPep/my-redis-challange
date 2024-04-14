@@ -1,16 +1,16 @@
 package storage
 
-// problem with redis implementation of db that each key has associated type
-// (each key has to include type information to prevent from two keys with different types to collide in one db idx)
+// problem with redis implementation of db that each Key has associated type
+// (each Key has to include type information to prevent from two keys with different types to collide in one db idx)
 // there is not much of what we can do but something like this
-// data types stream
-// t[k] -> data type
-// s[k] -> data type stream
-// data type stream
+// Data types stream
+// t[k] -> Data type
+// s[k] -> Data type stream
+// Data type stream
 // d[k] -> v
 // problems
-// (1) value expiry, sync value between concrete data type db and global types db - solution proxy each request
-// (2) separate data type specific implementation from global type - solution proxy
+// (1) value expiry, sync value between concrete Data type db and global types db - solution proxy each request
+// (2) separate Data type specific implementation from global type - solution proxy
 // (3) lots of mutexes
 
 type TypedStorage interface {

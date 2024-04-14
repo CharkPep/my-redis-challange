@@ -16,6 +16,11 @@ type StreamDataType struct {
 	mu   *sync.RWMutex
 }
 
+type StreamKV struct {
+	Key  string
+	Data []string
+}
+
 func NewStream(stream string) *StreamDataType {
 	return &StreamDataType{
 		mu:   &sync.RWMutex{},
@@ -28,18 +33,17 @@ func (st StreamDataType) GetType() DataType {
 	return STREAMS
 }
 
-func (st StreamDataType) Add(key string, data interface{}) (old interface{}, ok bool) {
+func (st StreamDataType) Add(key string, data []string) (old interface{}, ok bool) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	return st.tree.Insert(key, data)
 }
 
-func (st StreamDataType) Min(prefix string) (key string, val interface{}, ok bool) {
+func (st StreamDataType) Min(prefix string) (key string, val interface{}) {
 	st.mu.RLock()
 	defer st.mu.RUnlock()
 	// as any walk function does not provide api to chose edges from the edge list, has to walk the whole prefix,
 	st.tree.WalkPrefix(prefix, func(s string, v interface{}) bool {
-		ok = true
 		if strings.Compare(key, s) == -1 {
 			key = s
 			val = v
@@ -50,14 +54,13 @@ func (st StreamDataType) Min(prefix string) (key string, val interface{}, ok boo
 	return
 }
 
-func (st StreamDataType) Max(prefix string) (key string, val interface{}, ok bool) {
+func (st StreamDataType) Max(prefix string) (key string, val interface{}) {
 	st.mu.RLock()
 	defer st.mu.RUnlock()
 	// as any walk function does not provide api to chose edges from the edge list, has to walk the whole prefix
-	//key, val, ok = st.tree.LongestPrefix(prefix)
+	//Key, val, ok = st.tree.LongestPrefix(prefix)
 	st.tree.WalkPrefix(prefix, func(s string, v interface{}) bool {
 		fmt.Printf("Walking prefix %s, current %s\n", key, s)
-		ok = true
 		if strings.Compare(fmt.Sprintf("%s-0", key), s) == -1 {
 			key = s
 			val = v
@@ -67,4 +70,23 @@ func (st StreamDataType) Max(prefix string) (key string, val interface{}, ok boo
 	})
 
 	return
+}
+
+func (st StreamDataType) Range(start, end string) []StreamKV {
+	var kv []StreamKV
+	st.mu.RLock()
+	defer st.mu.RUnlock()
+	// very slow approach, though to optimize need to implement radix tree or tweak existing))
+	st.tree.Walk(func(s string, v interface{}) bool {
+		if strings.Compare(s, start) == 1 && strings.Compare(s, end) == -1 || strings.Compare(s, start) == 0 || strings.Compare(s, end) == 0 {
+			kv = append(kv, StreamKV{
+				Key:  s,
+				Data: v.([]string),
+			})
+		}
+
+		return false
+	})
+
+	return kv
 }

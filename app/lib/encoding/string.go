@@ -11,7 +11,9 @@ func DecodeString(r *bufio.Reader) (string, error) {
 		return "", err
 	}
 
+	fmt.Println(length)
 	if isStringInt {
+		fmt.Println("string int")
 		return fmt.Sprint(length), err
 	}
 

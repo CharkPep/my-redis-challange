@@ -3,6 +3,7 @@ package encoding
 import (
 	"bufio"
 	"bytes"
+	"fmt"
 	"testing"
 )
 
@@ -19,8 +20,7 @@ func TestDecodeString(t *testing.T) {
 
 	for i, test := range tests {
 		tc := test
-		t.Logf("Test case %d\n", i)
-		t.Run("", func(t *testing.T) {
+		t.Run(fmt.Sprintf("decode-string-%d", i), func(t *testing.T) {
 			t.Parallel()
 			got, err := DecodeString(tc.r)
 			if err != nil {
@@ -29,7 +29,7 @@ func TestDecodeString(t *testing.T) {
 			}
 
 			if got != tc.e {
-				t.Errorf("DecodeString() = %v, want %v", got, tc.e)
+				t.Errorf("got %q, expected %q", []byte(got), []byte(tc.e))
 			}
 		})
 	}

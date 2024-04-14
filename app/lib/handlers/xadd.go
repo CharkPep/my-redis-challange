@@ -28,7 +28,7 @@ func HandleXAdd(ctx context.Context, req *lib.RESPRequest) (interface{}, error) 
 		return nil, err
 	}
 
-	kVals := make(map[string]string)
+	kVals := make([]string, 0, len(req.Args.A[:2]))
 	for i := 2; i < len(req.Args.A); i += 2 {
 		field, ok := req.Args.A[i].(resp.BulkString)
 		if !ok {
@@ -44,7 +44,8 @@ func HandleXAdd(ctx context.Context, req *lib.RESPRequest) (interface{}, error) 
 			return nil, fmt.Errorf("unexpected type of the kv value, got %T", req.Args.A[1])
 		}
 
-		kVals[field.String()] = value.String()
+		kVals = append(kVals, field.String())
+		kVals = append(kVals, value.String())
 	}
 
 	var k string

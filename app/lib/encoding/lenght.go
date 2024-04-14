@@ -8,7 +8,9 @@ import (
 )
 
 const (
-	RDB_6BIT             = 0x00
+	// next 6 bits is the length
+	RDB_6BIT = 0x00
+	//next 14 bits is the length
 	RDB_14BIT            = 0x01
 	RDB_32BIT            = 0x02
 	RDB_8BIT_STR__AS_INT = 0x03

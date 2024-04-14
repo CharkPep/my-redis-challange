@@ -8,13 +8,15 @@ import (
 	"time"
 )
 
-type Stream interface {
-	Add(key string, data interface{}) (old interface{}, ok bool)
-}
+//type Stream interface {
+//	Add(Key string, Data interface{}) (old interface{}, ok bool, err error)
+//	Max(prefix string) (string, interface{})
+//	Min(prefix string) (string, interface{})
+//}
 
 type StreamsIdx struct {
-	mu      *sync.RWMutex
 	kTypes  *keyTypeMap
+	mu      *sync.RWMutex
 	streams map[string]*StreamProxy
 }
 
@@ -40,7 +42,6 @@ func (si StreamsIdx) GetOrCreateStream(stream string) (*StreamProxy, error) {
 		defer si.mu.Unlock()
 		s = &StreamProxy{
 			stream: st,
-			mu:     &sync.RWMutex{},
 			kType:  si.kTypes,
 		}
 		si.streams[stream] = s
@@ -54,7 +55,6 @@ func (si StreamsIdx) GetType() DataType {
 }
 
 type StreamProxy struct {
-	mu     *sync.RWMutex
 	stream *StreamDataType
 	kType  *keyTypeMap
 }
@@ -105,10 +105,8 @@ func parseStreamKey(key string) (timestamp StreamKey, sequence StreamKey, err er
 	return
 }
 
-func (st StreamProxy) Add(k string, data interface{}) (old interface{}, key string, ok bool, err error) {
-	st.mu.Lock()
-	defer st.mu.Unlock()
-	mx, _, ok := st.stream.Max("")
+func (st StreamProxy) Add(k string, data []string) (old interface{}, key string, ok bool, err error) {
+	mx, _ := st.stream.Max("")
 	mxT, mxS, err := parseStreamKey(mx)
 	if err != nil {
 		return nil, k, false, err
@@ -125,7 +123,7 @@ func (st StreamProxy) Add(k string, data interface{}) (old interface{}, key stri
 
 	if sequence.generate {
 		fmt.Printf("Generating sequence number for %d-*\n", timestamp.key)
-		mxPrefix, _, _ := st.stream.Max(fmt.Sprintf("%d-", timestamp.key))
+		mxPrefix, _ := st.stream.Max(fmt.Sprintf("%d-", timestamp.key))
 		_, nSeq, err := parseStreamKey(mxPrefix)
 		if err != nil {
 			return nil, key, false, err
@@ -152,4 +150,16 @@ func (st StreamProxy) Add(k string, data interface{}) (old interface{}, key stri
 	st.kType.SetType(st.stream.name, STREAMS)
 	old, ok = st.stream.Add(k, data)
 	return nil, k, false, nil
+}
+
+func (st StreamProxy) Max(prefix string) (string, interface{}) {
+	return st.stream.Max(prefix)
+}
+
+func (st StreamProxy) Min(prefix string) (string, interface{}) {
+	return st.stream.Min(prefix)
+}
+
+func (st StreamProxy) Range(start, end string) []StreamKV {
+	return st.stream.Range(start, end)
 }

@@ -33,6 +33,8 @@ func RegisterHandlers(router *lib.Router) {
 	router.RegisterHandlerFunc("select", lib.HandleSelect)
 	router.RegisterHandlerFunc("type", handlers.HandleType)
 	router.RegisterHandlerFunc("xadd", handlers.HandleXAdd)
+	router.RegisterHandlerFunc("xrange", handlers.HandleXRange)
+
 }
 func main() {
 	log.SetPrefix("redis-server:")

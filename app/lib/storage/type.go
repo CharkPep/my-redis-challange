@@ -36,7 +36,7 @@ func (kt keyTypeMap) AssertKeyTypeOrNone(key string, t DataType) (found bool, er
 	}
 
 	if tKey != t {
-		return false, fmt.Errorf("operation againsts wrong type of the key")
+		return false, fmt.Errorf("operation againsts wrong type of the Key")
 	}
 
 	return true, nil
