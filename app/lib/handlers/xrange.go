@@ -44,6 +44,15 @@ func HandleXRange(ctx context.Context, req *lib.RESPRequest) (interface{}, error
 		return nil, fmt.Errorf("wrong number of arguments")
 	}
 
+	if start == "-" {
+		start, _ = s.Min("")
+	}
+
+	if end == "+" {
+		end, _ = s.Max("")
+	}
+
+	req.Logger.Printf("Start %s, End %s", start, end)
 	kvs := s.Range(start, end)
 	var res resp.Array
 	for _, k := range kvs {

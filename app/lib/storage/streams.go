@@ -44,13 +44,15 @@ func (st StreamDataType) Min(prefix string) (key string, val interface{}) {
 	defer st.mu.RUnlock()
 	// as any walk function does not provide api to chose edges from the edge list, has to walk the whole prefix,
 	st.tree.WalkPrefix(prefix, func(s string, v interface{}) bool {
-		if strings.Compare(key, s) == -1 {
+		if strings.Compare(key, s) == 1 {
 			key = s
 			val = v
 		}
+
 		return false
 	})
 
+	fmt.Printf("Walking prefix %s, current %s\n", prefix, key)
 	return
 }
 
@@ -60,7 +62,6 @@ func (st StreamDataType) Max(prefix string) (key string, val interface{}) {
 	// as any walk function does not provide api to chose edges from the edge list, has to walk the whole prefix
 	//Key, val, ok = st.tree.LongestPrefix(prefix)
 	st.tree.WalkPrefix(prefix, func(s string, v interface{}) bool {
-		fmt.Printf("Walking prefix %s, current %s\n", key, s)
 		if strings.Compare(fmt.Sprintf("%s-0", key), s) == -1 {
 			key = s
 			val = v
@@ -76,7 +77,8 @@ func (st StreamDataType) Range(start, end string) []StreamKV {
 	var kv []StreamKV
 	st.mu.RLock()
 	defer st.mu.RUnlock()
-	// very slow approach, though to optimize need to implement radix tree or tweak existing))
+
+	// very slow approach, though to optimize need to implement radix tree or fork and tweak, mb contribute to radix-go))
 	st.tree.Walk(func(s string, v interface{}) bool {
 		if strings.Compare(s, start) == 1 && strings.Compare(s, end) == -1 || strings.Compare(s, start) == 0 || strings.Compare(s, end) == 0 {
 			kv = append(kv, StreamKV{

@@ -10,10 +10,7 @@ func DecodeString(r *bufio.Reader) (string, error) {
 	if err != nil {
 		return "", err
 	}
-
-	fmt.Println(length)
 	if isStringInt {
-		fmt.Println("string int")
 		return fmt.Sprint(length), err
 	}
 

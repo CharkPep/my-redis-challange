@@ -614,6 +614,68 @@ func TestHandleXRange(t *testing.T) {
 				}},
 			},
 		},
+		{
+			{
+				c: resp.Array{
+					[]resp.Marshaller{
+						resp.BulkString{S: []byte("XADD")},
+						resp.BulkString{S: []byte("stream")},
+						resp.BulkString{S: []byte("0-1")},
+						resp.BulkString{S: []byte("f")},
+						resp.BulkString{S: []byte("v")},
+					},
+				},
+				e: resp.Any{I: resp.BulkString{S: []byte("0-1")}},
+			},
+			{
+				c: resp.Array{
+					[]resp.Marshaller{
+						resp.BulkString{S: []byte("XADD")},
+						resp.BulkString{S: []byte("stream")},
+						resp.BulkString{S: []byte("1-1")},
+						resp.BulkString{S: []byte("f")},
+						resp.BulkString{S: []byte("v")},
+					},
+				},
+				e: resp.Any{I: resp.BulkString{S: []byte("1-1")}},
+			},
+			{
+				c: resp.Array{
+					[]resp.Marshaller{
+						resp.BulkString{S: []byte("XRANGE")},
+						resp.BulkString{S: []byte("stream")},
+						resp.BulkString{S: []byte("-")},
+						resp.BulkString{S: []byte("+")},
+					},
+				},
+				e: resp.Any{I: resp.Array{
+					A: []resp.Marshaller{
+						resp.Array{
+							[]resp.Marshaller{
+								resp.BulkString{S: []byte("0-1")},
+								resp.Array{
+									A: []resp.Marshaller{
+										resp.BulkString{S: []byte("f")},
+										resp.BulkString{S: []byte("v")},
+									},
+								},
+							},
+						},
+						resp.Array{
+							[]resp.Marshaller{
+								resp.BulkString{S: []byte("1-1")},
+								resp.Array{
+									A: []resp.Marshaller{
+										resp.BulkString{S: []byte("f")},
+										resp.BulkString{S: []byte("v")},
+									},
+								},
+							},
+						},
+					},
+				}},
+			},
+		},
 	}
 
 	for i, test := range ts {

@@ -122,14 +122,11 @@ func (st StreamProxy) Add(k string, data []string) (old interface{}, key string,
 	}
 
 	if sequence.generate {
-		fmt.Printf("Generating sequence number for %d-*\n", timestamp.key)
 		mxPrefix, _ := st.stream.Max(fmt.Sprintf("%d-", timestamp.key))
 		_, nSeq, err := parseStreamKey(mxPrefix)
 		if err != nil {
 			return nil, key, false, err
 		}
-
-		fmt.Printf("Longest prefix %s\n", mxPrefix)
 
 		if mxPrefix != "" {
 			sequence.key = nSeq.key + 1
