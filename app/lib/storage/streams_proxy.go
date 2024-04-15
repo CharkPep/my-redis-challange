@@ -41,9 +41,11 @@ func (si StreamsIdx) GetOrCreateStream(stream string) (*StreamProxy, error) {
 		si.mu.Lock()
 		defer si.mu.Unlock()
 		s = &StreamProxy{
-			stream: st,
-			kType:  si.kTypes,
+			stream:      st,
+			kType:       si.kTypes,
+			subscribers: make(map[string]chan<- StreamKV),
 		}
+
 		si.streams[stream] = s
 	}
 
@@ -52,11 +54,6 @@ func (si StreamsIdx) GetOrCreateStream(stream string) (*StreamProxy, error) {
 
 func (si StreamsIdx) GetType() DataType {
 	return STREAMS
-}
-
-type StreamProxy struct {
-	stream *StreamDataType
-	kType  *keyTypeMap
 }
 
 type StreamKey struct {
@@ -105,6 +102,30 @@ func parseStreamKey(key string) (timestamp StreamKey, sequence StreamKey, err er
 	return
 }
 
+type StreamProxy struct {
+	stream *StreamDataType
+	kType  *keyTypeMap
+	// simple pubsub to solve blocking read problem
+	subscribers map[string]chan<- StreamKV
+}
+
+func (st StreamProxy) Unsubscribe(id string) {
+	delete(st.subscribers, id)
+}
+
+func (st StreamProxy) Subscribe() (string, <-chan StreamKV) {
+	id := fmt.Sprint(time.Now().UnixNano())
+	ch := make(chan StreamKV, 10)
+	st.subscribers[id] = ch
+	return id, ch
+}
+
+func (st StreamProxy) Post(key StreamKV) {
+	for _, subscriber := range st.subscribers {
+		subscriber <- key
+	}
+}
+
 func (st StreamProxy) Add(k string, data []string) (old interface{}, key string, ok bool, err error) {
 	mx, _ := st.stream.Max("")
 	mxT, mxS, err := parseStreamKey(mx)
@@ -146,6 +167,11 @@ func (st StreamProxy) Add(k string, data []string) (old interface{}, key string,
 
 	st.kType.SetType(st.stream.name, STREAMS)
 	old, ok = st.stream.Add(k, data)
+	fmt.Printf("Posting KV with key %s\n", k)
+	st.Post(StreamKV{
+		Key:  k,
+		Data: data,
+	})
 	return nil, k, false, nil
 }
 

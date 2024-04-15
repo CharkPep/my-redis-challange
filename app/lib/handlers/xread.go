@@ -8,70 +8,171 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/app/lib/storage"
 	"strconv"
 	"strings"
+	"time"
 )
 
-func HandleXRead(ctx context.Context, req *lib.RESPRequest) (interface{}, error) {
-	type StreamIdKp struct {
-		stream string
-		id     string
+type Stream struct {
+	stream string
+	start  string
+}
+
+type xReadArgs struct {
+	streams []Stream
+	block   time.Duration
+	count   int
+}
+
+func parseXReadArgs(args *resp.Array) (*xReadArgs, error) {
+	readArgs := xReadArgs{
+		block: -1,
+		count: 1,
 	}
-	if len(req.Args.A) < 2 {
-		return nil, fmt.Errorf("wrong number of arguments")
-	}
 
-	if streams, ok := req.Args.A[0].(resp.BulkString); !ok || strings.ToLower(streams.String()) != "streams" {
-		return nil, fmt.Errorf("wrong arguments")
-	}
-
-	var res resp.Array
-	var streamKvsInput []StreamIdKp
-
-	for i := 1; i < len(req.Args.A)/2+1; i += 1 {
-		if i+1 >= len(req.Args.A) {
-			return nil, fmt.Errorf("wrong number of arguments")
-		}
-
-		stream, ok := req.Args.A[i].(resp.BulkString)
+	streams := -1
+	for i := 0; i < len(args.A); i++ {
+		arg, ok := args.A[i].(resp.BulkString)
 		if !ok {
-			return nil, fmt.Errorf("unexpected type of the key, got %T", req.Args.A[i])
+			return nil, fmt.Errorf("wrong type of the arguments")
 		}
 
-		var start string
-		startResp, ok := req.Args.A[len(req.Args.A)/2+i].(resp.BulkString)
+		switch arg.String() {
+		case "BLOCK", "block":
+			i++
+			timeResp, ok := args.A[i].(resp.BulkString)
+			if !ok {
+				return nil, fmt.Errorf("wrong type of the arguments")
+			}
+
+			t, err := strconv.ParseInt(timeResp.String(), 10, 64)
+			if err != nil {
+				return nil, err
+			}
+
+			if t < 0 {
+				return nil, fmt.Errorf("wrong arguments")
+			}
+
+			readArgs.block = time.Millisecond * time.Duration(t)
+			continue
+		case "COUNT", "count":
+			i++
+			countResp, ok := args.A[i].(resp.BulkString)
+			if !ok {
+				return nil, fmt.Errorf("wrong type of the arguments")
+			}
+
+			count, err := strconv.ParseInt(countResp.String(), 10, 64)
+			if err != nil {
+				return nil, err
+			}
+
+			if count < 0 {
+				return nil, fmt.Errorf("wrong arguments")
+			}
+
+			readArgs.count = int(count)
+			continue
+		case "STREAMS", "streams":
+			streams = i
+			continue
+		default:
+			if streams == -1 {
+				return nil, fmt.Errorf("unkown flag %s", arg.String())
+			}
+		}
+
+		if i == streams+(len(args.A)-streams)/2+1 {
+			break
+		}
+
+		//if streams+(len(args.A)-streams)/2 > len(args.A) {
+		//	fmt.Printf("Idx %d\n", i)
+		//	return nil, fmt.Errorf("wrong number of arguments")
+		//}
+
+		startResp, ok := args.A[i+(len(args.A)-streams)/2].(resp.BulkString)
 		if !ok {
-			return nil, fmt.Errorf("unexpected type of the val, got %T", req.Args.A[i+1])
+			return nil, fmt.Errorf("unexpected string type of the val, got %T", args.A[i+1])
 		}
 
-		start = startResp.String()
-		if len(strings.Split(start, "-")) == 1 {
+		if len(strings.Split(startResp.String(), "-")) == 1 {
 			return nil, fmt.Errorf("wrong arguments")
 		}
 
-		sequence, err := strconv.ParseInt(strings.Split(start, "-")[1], 10, 64)
+		sequence, err := strconv.ParseInt(strings.Split(startResp.String(), "-")[1], 10, 64)
 		if err != nil {
 			return nil, err
 		}
 
-		start = fmt.Sprintf("%s-%d", strings.Split(start, "-")[0], sequence+1)
-		streamKvsInput = append(streamKvsInput, StreamIdKp{
-			stream: stream.String(),
-			id:     start,
+		readArgs.streams = append(readArgs.streams, Stream{
+			stream: arg.String(),
+			start:  fmt.Sprintf("%s-%d", strings.Split(startResp.String(), "-")[0], sequence+1),
 		})
+
 	}
 
-	for _, stream := range streamKvsInput {
+	return &readArgs, nil
+}
+
+func HandleXRead(ctx context.Context, req *lib.RESPRequest) (interface{}, error) {
+	args, err := parseXReadArgs(req.Args)
+	if err != nil {
+		return nil, err
+	}
+
+	res := resp.Array{}
+	timeout := time.After(args.block)
+	req.Logger.Printf("Streams %s", args.streams)
+	for _, stream := range args.streams {
 		s, err := req.Db.GetStorage(storage.STREAMS).(*storage.StreamsIdx).GetOrCreateStream(stream.stream)
 		if err != nil {
 			return nil, err
 		}
 
-		kvs := s.Range(stream.id, "")
+		kvs := s.Range(stream.start, "")
 		streamReadResult := resp.Array{
 			A: []resp.Marshaller{
 				resp.BulkString{S: []byte(stream.stream)},
 			},
 		}
 
+		req.Logger.Printf("Block set for %s", args.block)
+		if len(kvs) == 0 && args.block != -1 {
+			req.Logger.Printf("Blocking for %s", args.block)
+			id, ch := s.Subscribe()
+			done := make(chan struct{})
+			read := make(chan storage.StreamKV)
+			go func() {
+				defer func() {
+					s.Unsubscribe(id)
+				}()
+
+				for {
+					select {
+					case kv := <-ch:
+						if strings.Compare(kv.Key, stream.start) == 1 || strings.Compare(kv.Key, stream.start) == 0 {
+							req.Logger.Printf("%s > %s", kv.Key, stream.stream)
+							read <- kv
+							continue
+						}
+
+					case <-done:
+						return
+					}
+				}
+			}()
+
+			select {
+			case <-timeout:
+				return resp.BulkString{S: nil, EncodeNil: true}, nil
+			case kv := <-read:
+				done <- struct{}{}
+				kvs = append(kvs, kv)
+				break
+			}
+		}
+
+		req.Logger.Printf("Key values %s", kvs)
 		kvData := resp.Array{}
 		for _, k := range kvs {
 			key := resp.Array{

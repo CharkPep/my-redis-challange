@@ -3,6 +3,7 @@ package lib
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	resp "github.com/codecrafters-io/redis-starter-go/app/lib/encoding"
 	"github.com/codecrafters-io/redis-starter-go/app/lib/storage"
@@ -104,6 +105,11 @@ func (req *RESPRequest) Handle(router *Router) {
 		n, err = req.read(req.r)
 		if err == io.EOF {
 			req.Logger.Printf("Connection closed by %s", req.RemoteAddr)
+			break
+		}
+
+		if errors.Is(err, os.ErrDeadlineExceeded) {
+			req.Logger.Printf("Request from %s timeouted", req.RemoteAddr)
 			break
 		}
 

@@ -831,3 +831,122 @@ func TestXReadHandler(t *testing.T) {
 		})
 	}
 }
+
+func TestXAddWithBlocking(t *testing.T) {
+	type tt struct {
+		c resp.Array
+		s time.Duration
+		e resp.Any
+	}
+
+	ts := [][]tt{
+		{
+			{
+				c: resp.Array{
+					[]resp.Marshaller{
+						resp.BulkString{S: []byte("xadd")},
+						resp.BulkString{S: []byte("stream")},
+						resp.BulkString{S: []byte("0-1")},
+						resp.BulkString{S: []byte("f")},
+						resp.BulkString{S: []byte("v")},
+					},
+				},
+				e: resp.Any{
+					I: resp.BulkString{S: []byte("0-1")},
+				},
+			},
+			{
+				s: time.Millisecond * 10,
+				c: resp.Array{
+					[]resp.Marshaller{
+						resp.BulkString{S: []byte("xread")},
+						resp.BulkString{S: []byte("block")},
+						resp.BulkString{S: []byte("2000")},
+						resp.BulkString{S: []byte("STREAMS")},
+						resp.BulkString{S: []byte("stream")},
+						resp.BulkString{S: []byte("0-1")},
+					},
+				},
+				e: resp.Any{
+					I: resp.Array{
+						[]resp.Marshaller{
+							resp.Array{
+								[]resp.Marshaller{
+									resp.BulkString{S: []byte("stream")},
+									resp.Array{
+										[]resp.Marshaller{
+											resp.Array{
+												[]resp.Marshaller{
+													resp.BulkString{S: []byte("1-1")},
+													resp.Array{
+														[]resp.Marshaller{
+															resp.BulkString{S: []byte("f")},
+															resp.BulkString{S: []byte("v")},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			{
+				s: time.Millisecond * 50,
+				c: resp.Array{
+					[]resp.Marshaller{
+						resp.BulkString{S: []byte("xadd")},
+						resp.BulkString{S: []byte("stream")},
+						resp.BulkString{S: []byte("1-1")},
+						resp.BulkString{S: []byte("f")},
+						resp.BulkString{S: []byte("v")},
+					},
+				},
+				e: resp.Any{
+					I: resp.BulkString{S: []byte("1-1")},
+				},
+			},
+		},
+	}
+
+	for i, test := range ts {
+		t.Run(fmt.Sprintf("blocking_xadd-%d", i), func(t *testing.T) {
+			_, router := SetupMaster(t, MASTER_PORT)
+			router.RegisterHandlerFunc("xadd", handlers.HandleXAdd)
+			router.RegisterHandlerFunc("xread", handlers.HandleXRead)
+			for j, c := range test {
+				c := c
+				t.Run(fmt.Sprintf("command %d", j), func(t *testing.T) {
+					t.Parallel()
+					if c.s != 0 {
+						time.Sleep(c.s)
+					}
+
+					client, err := net.DialTimeout("tcp", fmt.Sprintf(":%d", MASTER_PORT), time.Second)
+					if err != nil {
+						t.Error(err)
+					}
+
+					r := bufio.NewReader(client)
+					if _, err := c.c.MarshalRESP(client); err != nil {
+						t.Error(err)
+					}
+
+					res := resp.Any{}
+					if _, err := res.UnmarshalRESP(r); err != nil {
+						t.Error(err)
+					}
+
+					if !reflect.DeepEqual(res, c.e) {
+						t.Errorf("exptected %q, got %q", c.e.I, res.I)
+					}
+				})
+
+			}
+		})
+	}
+
+}
