@@ -95,6 +95,14 @@ func parseXReadArgs(args *resp.Array) (*xReadArgs, error) {
 			return nil, fmt.Errorf("unexpected string type of the val, got %T", args.A[i+1])
 		}
 
+		if startResp.String() == "$" {
+			readArgs.streams = append(readArgs.streams, Stream{
+				stream: arg.String(),
+				start:  "$",
+			})
+			continue
+		}
+
 		if len(strings.Split(startResp.String(), "-")) == 1 {
 			return nil, fmt.Errorf("wrong arguments")
 		}
@@ -131,6 +139,16 @@ func HandleXRead(ctx context.Context, req *lib.RESPRequest) (interface{}, error)
 		s, err := req.Db.GetStorage(storage.STREAMS).(*storage.StreamsIdx).GetOrCreateStream(stream.stream)
 		if err != nil {
 			return nil, err
+		}
+
+		if stream.start == "$" {
+			stream.start, _ = s.Max("")
+			sequence, err := strconv.ParseInt(strings.Split(stream.start, "-")[1], 10, 64)
+			if err != nil {
+				return nil, err
+			}
+
+			stream.start = fmt.Sprintf("%s-%d", strings.Split(stream.start, "-")[0], sequence+1)
 		}
 
 		kvs := s.Range(stream.start, "")
