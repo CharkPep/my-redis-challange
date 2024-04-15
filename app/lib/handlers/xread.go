@@ -121,8 +121,12 @@ func HandleXRead(ctx context.Context, req *lib.RESPRequest) (interface{}, error)
 	}
 
 	res := resp.Array{}
+	if args.block == 0 {
+		// connection io timeout, though should remove it
+		args.block = time.Second * 10
+	}
+
 	timeout := time.After(args.block)
-	req.Logger.Printf("Streams %s", args.streams)
 	for _, stream := range args.streams {
 		s, err := req.Db.GetStorage(storage.STREAMS).(*storage.StreamsIdx).GetOrCreateStream(stream.stream)
 		if err != nil {
